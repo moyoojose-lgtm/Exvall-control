@@ -1,0 +1,2494 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title id="page-title">Control Monetario Exvall</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2d5a3d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Exvall CM">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="Exvall CM">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface2: #f0efe9;
+    --border: rgba(0,0,0,0.09);
+    --border2: rgba(0,0,0,0.16);
+    --text: #1a1a18;
+    --text2: #6b6b65;
+    --text3: #a0a09a;
+    --accent: #2d5a3d;
+    --accent-bg: #e8f2eb;
+    --accent-text: #1e3d29;
+    --warn: #7a4a00;
+    --warn-bg: #fff3e0;
+    --danger: #8b1a1a;
+    --danger-bg: #fef2f2;
+    --success: #1e6b3a;
+    --success-bg: #e8f5ed;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  body.dark-mode {
+    --bg: #0f1710;
+    --surface: #1a2b1d;
+    --surface2: #223326;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.15);
+    --text: #e8ede9;
+    --text2: #9ab09e;
+    --text3: #5c7a61;
+    --accent: #4a9960;
+    --accent-bg: #1a3322;
+    --accent-text: #7dd4a0;
+    --warn: #d4a054;
+    --warn-bg: #2a1f0a;
+    --danger: #e07070;
+    --danger-bg: #2a1010;
+    --success: #5cc080;
+    --success-bg: #0f2a1a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.5; min-height: 100vh; }
+
+  /* ── PROFILE SELECTOR OVERLAY ── */
+  #profile-overlay {
+    position: fixed; inset: 0; background: var(--bg); z-index: 9999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .profile-logo { font-size: 28px; font-weight: 500; color: var(--accent); margin-bottom: 6px; letter-spacing: -0.5px; }
+  .profile-sub { font-size: 13px; color: var(--text3); margin-bottom: 32px; }
+  .profile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; width: 100%; max-width: 480px; margin-bottom: 16px; }
+  .profile-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 12px; text-align: center; cursor: pointer; transition: all 0.15s; position: relative;
+  }
+  .profile-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .profile-avatar {
+    width: 48px; height: 48px; border-radius: 50%; background: var(--accent-bg);
+    color: var(--accent); font-size: 20px; font-weight: 500; display: flex; align-items: center;
+    justify-content: center; margin: 0 auto 10px;
+  }
+  .profile-name { font-size: 14px; font-weight: 500; color: var(--text); }
+  .profile-meta { font-size: 11px; color: var(--text3); margin-top: 3px; }
+  .profile-del {
+    position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 50%;
+    border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-size: 12px;
+    color: var(--text3); display: none; align-items: center; justify-content: center;
+    transition: all 0.12s;
+  }
+  .profile-card:hover .profile-del { display: flex; }
+  .profile-del:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+  .btn-new-profile {
+    background: none; border: 2px dashed var(--border2); border-radius: var(--radius);
+    padding: 18px 12px; cursor: pointer; color: var(--text3); font-size: 13px; font-family: 'DM Sans', sans-serif;
+    width: 100%; transition: all 0.15s; text-align: center;
+  }
+  .btn-new-profile:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── NEW PROFILE MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 10000;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal { background: var(--surface); border-radius: var(--radius); padding: 24px; width: 100%; max-width: 340px; }
+  .modal-title { font-size: 16px; font-weight: 500; margin-bottom: 16px; }
+  .modal-field { margin-bottom: 12px; }
+  .modal-field label { display: block; font-size: 12px; color: var(--text2); font-weight: 500; margin-bottom: 5px; }
+  .modal-field input { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; }
+  .modal-field input:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .emoji-picker { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .emoji-opt { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all 0.12s; }
+  .emoji-opt.selected, .emoji-opt:hover { border-color: var(--accent); background: var(--accent-bg); }
+
+  /* ── CONFIRM MODAL ── */
+  #confirm-modal { display: none; }
+  #confirm-modal .modal-body { font-size: 14px; color: var(--text2); margin-bottom: 16px; }
+
+  /* 3.1 — Safe area para iPhone con notch / isla dinámica */
+  .app-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; padding-top: env(safe-area-inset-top); padding-left: calc(20px + env(safe-area-inset-left)); padding-right: calc(20px + env(safe-area-inset-right)); display: flex; align-items: center; justify-content: space-between; min-height: 56px; height: calc(56px + env(safe-area-inset-top)); position: sticky; top: 0; z-index: 100; }
+  .app-title { font-size: 16px; font-weight: 500; letter-spacing: -0.3px; }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .irpf-pill { display: flex; align-items: center; gap: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px 4px 10px; font-size: 13px; color: var(--text2); }
+  .irpf-pill input { width: 40px; border: none; background: transparent; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); text-align: center; outline: none; }
+
+  /* Switch de perfil en header */
+  .profile-switch-btn {
+    display: flex; align-items: center; gap: 6px; padding: 4px 10px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 999px;
+    cursor: pointer; font-size: 13px; color: var(--text2); transition: all 0.12s;
+  }
+  .profile-switch-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .profile-switch-avatar { font-size: 15px; }
+
+  .tab-nav { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; padding: 0 20px; gap: 0; }
+  .tab-btn { padding: 12px 16px; font-size: 14px; font-family: 'DM Sans', sans-serif; cursor: pointer; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text2); transition: color 0.15s; }
+  .tab-btn.active { color: var(--text); border-bottom-color: var(--text); font-weight: 500; }
+
+  .main { max-width: 680px; margin: 0 auto; padding: 20px 16px 60px; }
+  .section { display: none; }
+  .section.active { display: block; }
+
+  .month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 20px; }
+  .month-btn { padding: 9px 4px; font-size: 13px; font-family: 'DM Sans', sans-serif; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; background: var(--surface); color: var(--text2); text-align: center; transition: all 0.12s; }
+  .month-btn:hover { border-color: var(--border2); color: var(--text); }
+  .month-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 500; }
+  .month-btn.has-data { font-weight: 500; color: var(--text); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .card-title { font-size: 13px; font-weight: 500; color: var(--text2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; color: var(--text2); font-weight: 500; }
+  .field input, .field select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text); background: var(--surface); outline: none; transition: border-color 0.15s; }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field input:disabled { background: var(--surface2); color: var(--text3); cursor: not-allowed; }
+  .field input.highlight { border-color: #e09800; background: var(--warn-bg); }
+
+  .total-display { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 500; color: var(--accent); padding: 6px 0; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.12s; border: 1px solid transparent; }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { background: #244d34; }
+  .btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border2); }
+  .btn-secondary:hover { background: var(--surface2); }
+  .btn-danger { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: #fff; }
+  .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+  .route-box { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 10px; }
+  .route-stop { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
+  .route-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .route-dot.end { background: var(--text3); }
+  .stop-line { width: 1px; height: 14px; background: var(--border2); margin-left: 3.5px; }
+  .del-circle { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border2); background: var(--surface); cursor: pointer; font-size: 13px; color: var(--text3); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.12s; }
+  .del-circle:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+
+  .info-box { font-size: 13px; padding: 8px 12px; border-radius: var(--radius-sm); margin-top: 8px; }
+  .info-ok { background: var(--success-bg); color: var(--success); }
+  .info-warn { background: var(--warn-bg); color: var(--warn); }
+  .info-err { background: var(--danger-bg); color: var(--danger); }
+
+  .entries-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 500; font-family: 'DM Mono', monospace; }
+  .badge-green { background: var(--accent-bg); color: var(--accent-text); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { font-size: 11px; font-weight: 500; color: var(--text3); text-align: left; padding: 5px 6px; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid var(--border); }
+  td { padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .td-mono { font-family: 'DM Mono', monospace; }
+  .td-muted { color: var(--text3); }
+  .td-accent { font-weight: 500; color: var(--accent); font-family: 'DM Mono', monospace; }
+  tfoot td { border-top: 2px solid var(--border2); font-weight: 500; padding: 10px 6px; }
+
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+  .metric-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .metric-value { font-size: 20px; font-weight: 500; font-family: 'DM Mono', monospace; }
+  .metric-value.green { color: var(--success); }
+  .metric-value.muted { color: var(--text2); }
+
+  .config-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .config-item:last-child { border-bottom: none; }
+  .config-item span { flex: 1; }
+  .config-item input[type="number"] { width: 80px; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Mono', monospace; font-size: 13px; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--surface2); border: 1px solid var(--border); color: var(--text2); }
+
+  .hist-entry { font-size: 12px; color: var(--text2); padding: 3px 0; display: flex; gap: 12px; }
+  .hist-entry span:first-child { font-family: 'DM Mono', monospace; font-weight: 500; color: var(--text); }
+
+  .form-msg { font-size: 13px; color: var(--text2); margin-left: 8px; }
+  .form-msg.err { color: var(--danger); }
+  .form-msg.ok { color: var(--success); }
+
+  .add-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-top: 10px; }
+  .add-row input { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 13px; }
+
+  /* Notas en entradas */
+  .entry-nota { font-size: 11px; color: var(--text3); font-style: italic; display: block; margin-top: 2px; }
+
+  /* Toast notification */
+  #toast {
+    position: fixed; bottom: calc(24px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--text); color: #fff; padding: 10px 20px; border-radius: 999px;
+    font-size: 13px; z-index: 9000; transition: transform 0.25s ease; pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.toast-err { background: var(--danger); }
+  #toast.toast-ok  { background: var(--success); }
+
+  /* Barra de progreso anual */
+  .progress-bar-wrap { background: var(--surface2); border-radius: 999px; height: 6px; overflow: hidden; margin-top: 6px; }
+  .progress-bar { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.4s; }
+
+  /* Año selector */
+  .year-selector { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .year-selector button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-size: 14px; color: var(--text2); display: flex; align-items: center; justify-content: center; }
+  .year-selector button:hover { border-color: var(--accent); color: var(--accent); }
+  .year-selector span { font-size: 15px; font-weight: 500; font-family: 'DM Mono', monospace; min-width: 48px; text-align: center; }
+
+  /* Edit entry inline */
+  .edit-circle { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border2); background: var(--surface); cursor: pointer; font-size: 11px; color: var(--text3); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.12s; }
+  .edit-circle:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+  .entry-actions { display: flex; gap: 4px; }
+
+  /* Dark mode toggle */
+  .dark-mode-btn {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 1px solid var(--border2); background: var(--surface2);
+    cursor: pointer; font-size: 16px; display: flex; align-items: center;
+    justify-content: center; transition: all 0.15s; flex-shrink: 0;
+  }
+  .dark-mode-btn:hover { border-color: var(--accent); background: var(--accent-bg); }
+
+  /* iOS install banner */
+  #ios-install-banner {
+    display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 8000;
+    background: var(--surface); border-top: 1px solid var(--border2);
+    padding: 14px 16px calc(20px + env(safe-area-inset-bottom)); text-align: center;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.12);
+  }
+  #ios-install-banner .banner-title { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+  #ios-install-banner .banner-sub { font-size: 12px; color: var(--text2); margin-bottom: 12px; line-height: 1.5; }
+  #ios-install-banner .banner-close {
+    position: absolute; top: 10px; right: 14px; background: none; border: none;
+    font-size: 18px; color: var(--text3); cursor: pointer; padding: 4px;
+  }
+  #ios-install-banner .banner-steps {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 13px; color: var(--text); background: var(--surface2);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px;
+  }
+
+  /* Safari warning banner */
+  #safari-data-warning {
+    display: none; background: var(--warn-bg); border: 1px solid rgba(122,74,0,0.25);
+    border-radius: var(--radius-sm); padding: 10px 14px; margin: 12px 0;
+    font-size: 13px; color: var(--warn); line-height: 1.5;
+  }
+
+  /* Backup highlight button */
+  .btn-backup-highlight {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+    font-size: 14px; padding: 11px 20px; width: 100%;
+    justify-content: center; margin-bottom: 8px; border-radius: var(--radius);
+  }
+  .btn-backup-highlight:hover { background: #244d34; }
+  .btn-share { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+
+  /* 3.3 — Badge de modo offline */
+  #offline-badge {
+    display: none; align-items: center; gap: 5px;
+    background: var(--warn-bg); color: var(--warn);
+    border: 1px solid rgba(122,74,0,0.25); border-radius: 999px;
+    padding: 3px 10px; font-size: 12px; font-weight: 500; white-space: nowrap;
+  }
+  #offline-badge.visible { display: flex; }
+
+  @media (max-width: 480px) {
+    .metrics { grid-template-columns: 1fr 1fr; }
+    .metric:last-child { grid-column: 1 / -1; }
+    .app-header { padding: 0 12px; }
+    .main { padding: 16px 12px 60px; }
+    th, td { padding: 6px 4px; }
+    .profile-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── PROFILE OVERLAY ── -->
+<div id="profile-overlay">
+  <div class="profile-logo">Control Monetario Exvall</div>
+  <div class="profile-sub">Selecciona un perfil para continuar</div>
+  <div class="profile-grid" id="profile-grid"></div>
+  <button class="btn-new-profile" onclick="showNewProfileModal()">+ Nuevo perfil</button>
+</div>
+
+<!-- ── NEW PROFILE MODAL ── -->
+<div class="modal-overlay" id="new-profile-modal" style="display:none;">
+  <div class="modal">
+    <div class="modal-title">Nuevo perfil</div>
+    <div class="modal-field">
+      <label>Nombre</label>
+      <input type="text" id="np-name" placeholder="Ej: María, Ana..." maxlength="30"
+        onkeydown="if(event.key==='Enter')createProfile()">
+    </div>
+    <div class="modal-field">
+      <label>Icono</label>
+      <div class="emoji-picker" id="emoji-picker"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" onclick="closeNewProfileModal()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="createProfile()">Crear perfil</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONFIRM MODAL ── -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <div class="modal-title" id="confirm-title">¿Estás segura?</div>
+    <div class="modal-body" id="confirm-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" onclick="confirmCancel()">Cancelar</button>
+      <button class="btn btn-danger btn-sm" id="confirm-ok-btn" onclick="confirmOk()">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── EDIT ENTRY MODAL ── -->
+<div class="modal-overlay" id="edit-modal" style="display:none;">
+  <div class="modal" style="max-width:400px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-title">✏️ Editar entrada</div>
+    <div class="modal-field">
+      <label>Día</label>
+      <input type="number" id="edit-dia" min="1" max="31" placeholder="1–31">
+    </div>
+    <div class="modal-field">
+      <label>Servicio</label>
+      <select id="edit-servicio" onchange="onEditServicioChange()"></select>
+    </div>
+    <div class="modal-field" id="edit-especial-desc-wrap" style="display:none;">
+      <label>Descripción (Especial)</label>
+      <input type="text" id="edit-especial-desc" placeholder="ej: Bautizo, Cumpleaños...">
+    </div>
+    <div class="modal-field" id="edit-especial-precio-wrap" style="display:none;">
+      <label>Precio (Especial €)</label>
+      <input type="number" id="edit-manual" min="0" placeholder="0">
+    </div>
+    <div class="modal-field">
+      <label>Lugar</label>
+      <select id="edit-lugar" onchange="onEditLugarChange()"></select>
+    </div>
+    <div class="modal-field">
+      <label>Coche</label>
+      <select id="edit-coche" onchange="onEditCocheChange()">
+        <option value="no">No</option>
+        <option value="si">Sí — precio fijo</option>
+        <option value="km">Sí — por km</option>
+      </select>
+    </div>
+    <div id="edit-km-wrap" style="display:none;" class="modal-field">
+      <label>Km recorridos</label>
+      <input type="number" id="edit-km" min="0" placeholder="0">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="modal-field">
+        <label>Horas extra</label>
+        <input type="number" id="edit-hext" min="0" step="0.5" placeholder="0">
+      </div>
+      <div class="modal-field">
+        <label>Horas nocturnas</label>
+        <input type="number" id="edit-hnoc" min="0" step="0.5" placeholder="0">
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Nota (opcional)</label>
+      <input type="text" id="edit-nota" placeholder="Observaciones...">
+    </div>
+    <div style="background:var(--accent-bg);border:1px solid rgba(45,90,61,0.2);border-radius:var(--radius-sm);padding:10px 14px;margin-top:4px;display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:13px;color:var(--text2);">Total recalculado</span>
+      <span id="edit-total-preview" style="font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--accent);">0,00 €</span>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-secondary btn-sm" onclick="closeEditModal()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="saveEditEntry()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── iOS INSTALL BANNER ── -->
+<div id="ios-install-banner">
+  <button class="banner-close" onclick="dismissIOSBanner()">×</button>
+  <div class="banner-title">📲 Instalar Control Monetario Exvall en tu iPhone</div>
+  <div class="banner-sub">Para usarla como app y tener acceso offline:</div>
+  <div class="banner-steps">
+    <span>Pulsa</span>
+    <span style="font-size:18px;">⎙</span>
+    <span style="color:var(--text2);">Compartir</span>
+    <span>→</span>
+    <span style="font-size:16px;">＋</span>
+    <span style="color:var(--text2);">"Añadir a inicio"</span>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div id="toast"></div>
+
+<!-- ── APP ── -->
+<div id="app" style="display:none;">
+
+<header class="app-header">
+  <div id="pwa-install-btn" style="display:none;">
+    <button class="btn btn-secondary btn-sm" id="btn-install" onclick="installPWA()" style="font-size:12px;padding:5px 10px;">
+      + Instalar app
+    </button>
+  </div>
+  <div class="app-title" id="app-name-display" onclick="editName()" title="Haz clic para cambiar el nombre" style="cursor:pointer;">Control Monetario Exvall</div>
+  <input type="text" id="app-name-input" placeholder="Tu nombre..." style="display:none;font-size:16px;font-weight:500;border:none;border-bottom:1px solid var(--border2);background:transparent;outline:none;width:160px;font-family:'DM Sans',sans-serif;" onblur="saveName()" onkeydown="if(event.key==='Enter')saveName()">
+  <div class="header-right">
+    <span id="offline-badge" title="Sin conexión — el cálculo de rutas no está disponible">⚡ Sin conexión</span>
+    <span id="saved-indicator" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;opacity:0.5;transition:opacity 0.4s;white-space:nowrap;"></span>
+    <button class="dark-mode-btn" id="dark-mode-btn" onclick="toggleDarkMode()" title="Modo oscuro">🌙</button>
+    <div class="irpf-pill">
+      <span>IRPF</span>
+      <input type="number" id="irpf-input" min="0" max="50" step="1" value="8" oninput="onIrpfChange()">
+      <span>%</span>
+    </div>
+    <button class="profile-switch-btn" onclick="switchProfile()" title="Cambiar de perfil">
+      <span class="profile-switch-avatar" id="header-avatar">👤</span>
+      <span id="header-profile-name" style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+    </button>
+  </div>
+</header>
+
+<nav class="tab-nav">
+  <button class="tab-btn active" onclick="showTab('registrar',this)">Registrar</button>
+  <button class="tab-btn" onclick="showTab('resumen',this)">Resumen</button>
+  <button class="tab-btn" onclick="showTab('config',this)">Configuración</button>
+</nav>
+
+<main class="main">
+
+  <!-- REGISTRAR -->
+  <div id="sec-registrar" class="section active">
+
+    <div class="year-selector">
+      <button onclick="changeYear(-1)">‹</button>
+      <span id="year-display"></span>
+      <button onclick="changeYear(1)">›</button>
+    </div>
+
+    <div class="month-grid" id="month-grid"></div>
+
+    <div class="card">
+      <div class="field-grid">
+        <div class="field">
+          <label>Día</label>
+          <input type="number" id="f-dia" min="1" max="31" placeholder="1–31" onchange="onDiaChange()">
+        </div>
+        <div class="field">
+          <label>Servicio</label>
+          <select id="f-servicio" onchange="onServicioChange()"><option value="">— Selecciona —</option></select>
+        </div>
+        <div class="field">
+          <label>Lugar</label>
+          <select id="f-lugar" onchange="onLugarChange()"><option value="">— Selecciona —</option></select>
+        </div>
+        <div class="field">
+          <label>Coche</label>
+          <select id="f-coche" onchange="onCocheChange()">
+            <option value="no">No</option>
+            <option value="si">Sí — precio fijo</option>
+            <option value="km">Sí — por km (ruta)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-grid">
+        <div class="field">
+          <label>Horas extra</label>
+          <input type="number" id="f-hext" min="0" step="0.5" placeholder="0" oninput="calcTotal()">
+        </div>
+        <div class="field">
+          <label>Horas nocturnas</label>
+          <input type="number" id="f-hnoc" min="0" step="0.5" placeholder="0" oninput="calcTotal()">
+        </div>
+        <div class="field" id="f-especial-desc-wrap" style="display:none;">
+          <label>Descripción (Especial)</label>
+          <input type="text" id="f-especial-desc" placeholder="ej: Bautizo, Cumpleaños...">
+        </div>
+        <div class="field" id="f-especial-precio-wrap" style="display:none;">
+          <label>Precio (Especial)</label>
+          <input type="number" id="f-manual" min="0" placeholder="0 €" oninput="calcTotal()">
+        </div>
+        <div class="field">
+          <label>Nota (opcional)</label>
+          <input type="text" id="f-nota" placeholder="Observaciones...">
+        </div>
+        <div class="field">
+          <label>Total</label>
+          <div class="total-display" id="f-total">0,00 €</div>
+        </div>
+      </div>
+
+      <div id="day-panel" style="display:none;background:var(--success-bg);border:1px solid rgba(30,107,58,0.2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;font-family:'DM Sans',sans-serif;"></div>
+      <div id="route-section" style="display:none;">
+        <div class="route-box">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Ruta: Valladolid → paradas → Valladolid. Añade cada parada con su lugar y servicio.</div>
+          <div id="stops-list"></div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-top:10px;">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">Nueva parada</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+              <div class="field">
+                <label>Lugar</label>
+                <select id="stop-lugar"><option value="">— Lugar —</option></select>
+              </div>
+              <div class="field">
+                <label>Servicio</label>
+                <select id="stop-servicio"><option value="">— Servicio —</option></select>
+              </div>
+            </div>
+            <div id="stop-especial-wrap" style="display:none;margin-bottom:8px;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div class="field">
+                  <label>Descripción Especial</label>
+                  <input type="text" id="stop-especial-desc" placeholder="Bautizo, Cumpleaños...">
+                </div>
+                <div class="field">
+                  <label>Precio Especial (€)</label>
+                  <input type="number" id="stop-especial-precio" min="0" placeholder="0" oninput="calcTotal()">
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="addStop()">+ Añadir parada</button>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-primary btn-sm" id="btn-calc" onclick="calcRoute()">Calcular km de la ruta</button>
+            <div id="route-info" style="display:none;font-size:13px;"></div>
+          </div>
+          <div id="km-manual-row" style="display:none;margin-top:8px;">
+            <div class="field">
+              <label>Km totales (manual)</label>
+              <input type="number" id="f-km-manual" min="0" placeholder="0" style="width:130px;" oninput="onKmManualChange()">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-top:4px;">
+        <button class="btn btn-primary" onclick="addEntry()">Añadir entrada</button>
+        <span class="form-msg" id="form-msg"></span>
+      </div>
+    </div>
+
+    <div id="entries-container"></div>
+  </div>
+
+  <!-- RESUMEN -->
+  <div id="sec-resumen" class="section">
+    <div class="metrics" id="resumen-metrics"></div>
+    <div class="card" id="resumen-table"></div>
+  </div>
+
+  <!-- CONFIGURACIÓN -->
+  <div id="sec-config" class="section">
+
+    <div class="card">
+      <div class="card-title">Perfiles</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Gestiona los perfiles de usuario. Cada perfil tiene sus propios datos.</p>
+      <div id="cfg-profiles-list"></div>
+      <div style="margin-top:10px;">
+        <button class="btn btn-secondary btn-sm" onclick="showNewProfileModal()">+ Crear nuevo perfil</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Copia de seguridad</div>
+      <div id="safari-data-warning">
+        ⚠️ <strong>Atención — Safari/iPhone:</strong> Los datos se guardan en el navegador. Si borras el historial de Safari o usas navegación privada, los datos podrían perderse. <strong>Exporta una copia de seguridad regularmente</strong> y guárdala en iCloud, WhatsApp o email.
+      </div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Exporta todos tus datos para guardarlos o pasarlos a otro dispositivo. Importa para restaurarlos.</p>
+      <button class="btn btn-backup-highlight" onclick="exportBackupAndShare()">⬇ Exportar y guardar copia de seguridad</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px;">
+        <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;">
+          Importar datos (.json)
+          <input type="file" accept=".json" onchange="importBackup(event)" style="display:none;">
+        </label>
+      </div>
+      <div id="backup-msg" style="font-size:12px;color:var(--text2);margin-top:8px;display:none;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Historial IRPF</div>
+      <div id="irpf-hist"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Servicios <span style="font-weight:400;font-size:11px;text-transform:none;">(el precio se congela en cada entrada al registrar)</span></div>
+      <div id="servicios-list"></div>
+      <div class="add-row">
+        <input type="text" id="new-serv-name" placeholder="Nombre servicio" style="width:150px;">
+        <input type="number" id="new-serv-precio" placeholder="€" style="width:80px;">
+        <button class="btn btn-primary btn-sm" onclick="addServicio()">Añadir</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Lugares <span style="font-weight:400;font-size:11px;text-transform:none;">(el precio de coche se congela al registrar)</span></div>
+      <div id="lugares-list"></div>
+      <div class="add-row">
+        <input type="text" id="new-lug-name" placeholder="Nombre lugar" style="width:150px;">
+        <input type="number" id="new-lug-coche" placeholder="Coche €" style="width:80px;">
+        <button class="btn btn-primary btn-sm" onclick="addLugar()">Añadir</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Extras</div>
+      <div class="field-grid">
+        <div class="field"><label>Hora extra (€)</label><input type="number" id="cfg-hext" step="0.5" oninput="saveConfig()"></div>
+        <div class="field"><label>Hora nocturna (€)</label><input type="number" id="cfg-hnoc" step="0.5" oninput="saveConfig()"></div>
+        <div class="field"><label>Precio por km (€)</label><input type="number" id="cfg-km" step="0.01" oninput="saveConfig()"></div>
+        <div class="field"><label>Objetivo anual (€)</label><input type="number" id="cfg-objetivo" min="0" step="100" placeholder="0 = sin objetivo" oninput="saveConfig()"></div>
+      </div>
+    </div>
+
+    <div class="card" id="card-nube">
+      <div class="card-title">☁️ Backup en la nube</div>
+      <div id="nube-login-section">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Inicia sesión con tu email para guardar y restaurar tus datos en la nube. Recibirás un enlace mágico — sin contraseña.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+          <div class="field" style="flex:1;min-width:180px;">
+            <label>Tu email</label>
+            <input type="email" id="nube-email" placeholder="tu@email.com" autocomplete="email">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="nubeLogin()" id="btn-nube-login">Enviar enlace</button>
+        </div>
+        <div id="nube-login-msg" style="font-size:12px;margin-top:8px;display:none;"></div>
+      </div>
+      <div id="nube-session-section" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div>
+            <div style="font-size:13px;font-weight:500;" id="nube-user-email"></div>
+            <div style="font-size:11px;color:var(--text3);" id="nube-ultimo-backup"></div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="nubeLogout()">Cerrar sesión</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="nubeSubir()">⬆ Subir backup</button>
+          <button class="btn btn-secondary" style="flex:1;justify-content:center;" onclick="nubeRestaurar()">⬇ Restaurar</button>
+        </div>
+        <div id="nube-msg" style="font-size:12px;margin-top:8px;display:none;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="color:var(--danger);">Zona peligrosa</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Eliminar todos los datos del perfil actual. Esta acción no se puede deshacer.</p>
+      <button class="btn btn-danger btn-sm" onclick="confirmDeleteAllData()">Borrar todos los datos de este perfil</button>
+    </div>
+
+  </div>
+
+</main>
+</div><!-- /#app -->
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// CONSTANTES Y ESTADO GLOBAL
+// ══════════════════════════════════════════════════════════════════════════════
+const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const EMOJIS = ['👤','🌸','⭐','🎀','💚','🦋','🌺','🎵','✨','🍀','🌙','💫'];
+let routeStops = [], calculatedKm = 0;
+let currentYear = new Date().getFullYear();
+let activeProfileId = null;
+
+// Perfil por defecto (state)
+const DEFAULT_STATE = () => ({
+  irpf: 8,
+  irpfHist: [],
+  currentMonth: new Date().getMonth(),
+  servicios: [
+    {id:'boda',name:'Boda',precio:80},
+    {id:'comidas',name:'Comidas',precio:65},
+    {id:'cenas',name:'Cenas',precio:65},
+    {id:'servicio3h',name:'Servicio 3H',precio:45},
+    {id:'especial',name:'Especial',precio:0}
+  ],
+  lugares: [
+    {id:'arzuaga',name:'Arzuaga',coche:18},
+    {id:'olmedo',name:'Olmedo',coche:20},
+    {id:'valbuena',name:'Valbuena',coche:20},
+    {id:'concejo',name:'Concejo',coche:13},
+    {id:'montico',name:'Montico',coche:7},
+    {id:'afpesquera',name:'AF Pesquera',coche:22},
+    {id:'medinarioseco',name:'Medina Rioseco',coche:20},
+    {id:'otro',name:'Otro / Especial',coche:0}
+  ],
+  extras: {hext:12, hnoc:15, km:0.23},
+  objetivo: 0,
+  entries: {},
+  banco: {},
+  nombre: ''
+});
+
+let state = DEFAULT_STATE();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INDEXEDDB — capa de persistencia (reemplaza localStorage para datos de perfil)
+// localStorage solo se usa para preferencias simples (dark mode, banner iOS)
+// ══════════════════════════════════════════════════════════════════════════════
+const DB_NAME = 'exvall_cm_db';
+const DB_VERSION = 1;
+let _db = null;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    if (_db) { resolve(_db); return; }
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('profiles'))
+        db.createObjectStore('profiles', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('profileData'))
+        db.createObjectStore('profileData');
+    };
+    req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+
+function dbGet(store, key) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx  = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  }));
+}
+
+function dbPut(store, value, key) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx  = db.transaction(store, 'readwrite');
+    const req = key !== undefined
+      ? tx.objectStore(store).put(value, key)
+      : tx.objectStore(store).put(value);
+    req.onsuccess = () => resolve();
+    req.onerror   = () => reject(req.error);
+  }));
+}
+
+function dbDelete(store, key) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx  = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).delete(key);
+    req.onsuccess = () => resolve();
+    req.onerror   = () => reject(req.error);
+  }));
+}
+
+function dbGetAll(store) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx  = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  }));
+}
+
+// ── Lista de perfiles ──────────────────────────────────────────────────────
+async function getProfiles() {
+  try { return await dbGetAll('profiles'); } catch(e) { return []; }
+}
+async function saveProfiles(profiles) {
+  const db = await openDB();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction('profiles', 'readwrite');
+    const store = tx.objectStore('profiles');
+    store.clear();
+    profiles.forEach(p => store.put(p));
+    tx.oncomplete = resolve;
+    tx.onerror    = reject;
+  });
+}
+
+// ── Datos de perfil ────────────────────────────────────────────────────────
+async function loadProfile(id) {
+  try {
+    // Migración desde localStorage si existen datos antiguos
+    const legacyRaw = localStorage.getItem(`exvall_profile_${id}`)
+                   || localStorage.getItem('exvall_sary_v4')
+                   || localStorage.getItem('exvall_cm_v1');
+    if (legacyRaw) {
+      const legacyData = JSON.parse(legacyRaw);
+      await dbPut('profileData', legacyData, id);
+      localStorage.removeItem(`exvall_profile_${id}`);
+      localStorage.removeItem('exvall_sary_v4');
+      localStorage.removeItem('exvall_cm_v1');
+    }
+    const data = await dbGet('profileData', id);
+    state = data ? { ...DEFAULT_STATE(), ...data } : DEFAULT_STATE();
+  } catch(e) { state = DEFAULT_STATE(); }
+  state.currentMonth = new Date().getMonth();
+}
+
+async function saveProfile() {
+  if (!activeProfileId) return;
+  try {
+    await dbPut('profileData', state, activeProfileId);
+    updateSavedIndicator();
+  } catch(e) {}
+}
+
+// Alias — se puede llamar sin await
+function save() { saveProfile(); }
+
+// ── Indicador "Guardado DD/MM/AA" ─────────────────────────────────────────
+function updateSavedIndicator() {
+  const el = document.getElementById('saved-indicator');
+  if (!el) return;
+  const now = new Date();
+  const dd  = String(now.getDate()).padStart(2,'0');
+  const mm  = String(now.getMonth()+1).padStart(2,'0');
+  const yy  = String(now.getFullYear()).slice(-2);
+  el.textContent  = `Guardado ${dd}/${mm}/${yy}`;
+  el.style.opacity = '1';
+  clearTimeout(el._fadeTimer);
+  el._fadeTimer = setTimeout(() => { el.style.opacity = '0.5'; }, 4000);
+}
+
+async function renderProfileSelector() {
+  const profiles = await getProfiles();
+  const grid = document.getElementById('profile-grid');
+  if (profiles.length === 0) {
+    grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text3);font-size:13px;">No hay perfiles. Crea el primero.</p>';
+    return;
+  }
+  // FIX 1.1: Promise.all para permitir await dentro del map
+  const cards = await Promise.all(profiles.map(async p => {
+    const data = await dbGet('profileData', p.id) || {};
+    const totalEntradas = Object.values(data.entries || {}).reduce((s, arr) => s + arr.length, 0);
+    return `<div class="profile-card" onclick="selectProfile('${p.id}')">
+      <button class="profile-del" onclick="event.stopPropagation();deleteProfileConfirm('${p.id}')" title="Eliminar perfil">×</button>
+      <div class="profile-avatar">${p.emoji || '👤'}</div>
+      <div class="profile-name">${escHtml(p.name)}</div>
+      <div class="profile-meta">${totalEntradas} entrada${totalEntradas !== 1 ? 's' : ''}</div>
+    </div>`;
+  }));
+  grid.innerHTML = cards.join('');
+}
+
+async function selectProfile(id) {
+  const profiles = await getProfiles();
+  const profile = profiles.find(p => p.id === id);
+  if (!profile) return;
+  activeProfileId = id;
+  await loadProfile(id);
+  document.getElementById('profile-overlay').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('header-avatar').textContent = profile.emoji || '👤';
+  document.getElementById('header-profile-name').textContent = profile.name;
+  const nombre = state.nombre || profile.name;
+  document.getElementById('app-name-display').textContent = nombre;
+  document.getElementById('page-title').textContent = nombre ;
+  document.getElementById('irpf-input').value = state.irpf;
+  if (!state.irpfHist || state.irpfHist.length === 0) {
+    state.irpfHist = [{valor: state.irpf, desde: new Date().toLocaleDateString('es-ES')}];
+  }
+  currentYear = new Date().getFullYear();
+  document.getElementById('year-display').textContent = currentYear;
+  populateDropdowns();
+  renderMonths();
+  renderEntries();
+  // Activar tab registrar
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelector('.tab-btn').classList.add('active');
+  document.getElementById('sec-registrar').classList.add('active');
+}
+
+function switchProfile() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('profile-overlay').style.display = 'flex';
+  renderProfileSelector();
+}
+
+// ── Nuevo perfil modal ──
+let selectedEmoji = '👤';
+function showNewProfileModal() {
+  selectedEmoji = EMOJIS[0];
+  document.getElementById('np-name').value = '';
+  const picker = document.getElementById('emoji-picker');
+  picker.innerHTML = EMOJIS.map(e =>
+    `<button class="emoji-opt ${e === selectedEmoji ? 'selected' : ''}" onclick="selectEmoji('${e}',this)">${e}</button>`
+  ).join('');
+  document.getElementById('new-profile-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('np-name').focus(), 100);
+}
+function closeNewProfileModal() {
+  document.getElementById('new-profile-modal').style.display = 'none';
+}
+function selectEmoji(e, btn) {
+  selectedEmoji = e;
+  document.querySelectorAll('.emoji-opt').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+async function createProfile() {
+  const name = document.getElementById('np-name').value.trim();
+  if (!name) { document.getElementById('np-name').focus(); return; }
+  const profiles = await getProfiles();
+  const id = crypto.randomUUID();
+  profiles.push({ id, name, emoji: selectedEmoji, createdAt: new Date().toLocaleDateString('es-ES') });
+  await saveProfiles(profiles);
+  closeNewProfileModal();
+  renderProfileSelector();
+  renderCfgProfiles();
+  showToast('Perfil "' + name + '" creado', 'ok');
+  // Auto-seleccionar si es el primero
+  if (profiles.length === 1) selectProfile(id);
+}
+
+// ── Confirmar modal genérico ──
+let _confirmCallback = null;
+function showConfirm(title, body, okLabel, cb) {
+  _confirmCallback = cb;
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-body').textContent = body;
+  document.getElementById('confirm-ok-btn').textContent = okLabel || 'Eliminar';
+  document.getElementById('confirm-modal').style.display = 'flex';
+}
+function confirmOk() {
+  document.getElementById('confirm-modal').style.display = 'none';
+  if (_confirmCallback) _confirmCallback();
+  _confirmCallback = null;
+}
+function confirmCancel() {
+  document.getElementById('confirm-modal').style.display = 'none';
+  _confirmCallback = null;
+}
+
+async function deleteProfileConfirm(id) {
+  const profiles = await getProfiles();
+  const p = profiles.find(x => x.id === id);
+  if (!p) return;
+  showConfirm(
+    'Eliminar perfil',
+    `¿Eliminar el perfil "${p.name}" y todos sus datos? Esta acción no se puede deshacer.`,
+    'Eliminar perfil',
+    async () => {
+      const updated = profiles.filter(x => x.id !== id);
+      await saveProfiles(updated);
+      await dbDelete('profileData', id);
+      renderProfileSelector();
+      renderCfgProfiles();
+      showToast('Perfil eliminado');
+    }
+  );
+}
+
+async function renderCfgProfiles() {
+  const el = document.getElementById('cfg-profiles-list');
+  if (!el) return;
+  const profiles = await getProfiles();
+  if (profiles.length === 0) { el.innerHTML = '<p style="font-size:13px;color:var(--text3);">Sin perfiles.</p>'; return; }
+  el.innerHTML = profiles.map(p => `
+    <div class="config-item">
+      <span style="font-size:16px;">${p.emoji || '👤'}</span>
+      <span>${escHtml(p.name)} ${p.id === activeProfileId ? '<span class="tag" style="background:var(--accent-bg);color:var(--accent-text);border-color:var(--accent);">activo</span>' : ''}</span>
+      ${p.id !== activeProfileId ? `<button class="del-circle" onclick="deleteProfileConfirm('${p.id}')">×</button>` : '<span style="width:22px;"></span>'}
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODO OSCURO
+// ══════════════════════════════════════════════════════════════════════════════
+function toggleDarkMode() {
+  const isDark = document.body.classList.toggle('dark-mode');
+  document.getElementById('dark-mode-btn').textContent = isDark ? '☀️' : '🌙';
+  localStorage.setItem('exvall_dark_mode', isDark ? '1' : '0');
+}
+function initDarkMode() {
+  const saved = localStorage.getItem('exvall_dark_mode');
+  // Auto-detectar preferencia del sistema si no hay preferencia guardada
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (saved === '1' || (saved === null && prefersDark)) {
+    document.body.classList.add('dark-mode');
+    const btn = document.getElementById('dark-mode-btn');
+    if (btn) btn.textContent = '☀️';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// iOS / SAFARI DETECTION
+// ══════════════════════════════════════════════════════════════════════════════
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function isSafari() {
+  return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+}
+function isInStandaloneMode() {
+  return window.navigator.standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches;
+}
+function showIOSBannerIfNeeded() {
+  if (!isIOS() || isInStandaloneMode()) return;
+  const dismissed = localStorage.getItem('exvall_ios_banner_dismissed');
+  if (dismissed) return;
+  setTimeout(() => {
+    document.getElementById('ios-install-banner').style.display = 'block';
+  }, 2500);
+}
+function dismissIOSBanner() {
+  document.getElementById('ios-install-banner').style.display = 'none';
+  localStorage.setItem('exvall_ios_banner_dismissed', '1');
+}
+function showSafariWarningIfNeeded() {
+  const el = document.getElementById('safari-data-warning');
+  if (el && (isIOS() || isSafari())) {
+    el.style.display = 'block';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════════════════════════
+let _toastTimer = null;
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show' + (type === 'err' ? ' toast-err' : type === 'ok' ? ' toast-ok' : '');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { t.className = ''; }, 2800);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UTILIDADES
+// ══════════════════════════════════════════════════════════════════════════════
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function saveConfig() {
+  state.extras.hext = parseFloat(document.getElementById('cfg-hext').value) || 12;
+  state.extras.hnoc = parseFloat(document.getElementById('cfg-hnoc').value) || 15;
+  state.extras.km   = parseFloat(document.getElementById('cfg-km').value)   || 0.23;
+  state.objetivo    = parseFloat(document.getElementById('cfg-objetivo').value) || 0;
+  save();
+}
+
+function onIrpfChange() {
+  const nuevo = parseFloat(document.getElementById('irpf-input').value) || 0;
+  if (nuevo === state.irpf) return;
+  state.irpf = nuevo;
+  if (!state.irpfHist) state.irpfHist = [];
+  state.irpfHist.push({valor: nuevo, desde: new Date().toLocaleDateString('es-ES')});
+  save();
+}
+
+function showTab(t, el) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('sec-' + t).classList.add('active');
+  if (t === 'resumen') renderResumen();
+  if (t === 'config') { renderConfig(); showSafariWarningIfNeeded(); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AÑO
+// ══════════════════════════════════════════════════════════════════════════════
+function changeYear(delta) {
+  currentYear += delta;
+  document.getElementById('year-display').textContent = currentYear;
+  renderMonths();
+  renderEntries();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MESES Y ENTRADAS
+// ══════════════════════════════════════════════════════════════════════════════
+function renderMonths() {
+  const el = document.getElementById('month-grid');
+  el.innerHTML = MONTHS.map((m, i) => {
+    const key = `${currentYear}-${i}`;
+    const hasData = state.entries[key] && state.entries[key].length > 0;
+    return `<button class="month-btn ${i===state.currentMonth?'active':''} ${hasData?'has-data':''}" onclick="selectMonth(${i})">${m}</button>`;
+  }).join('');
+}
+
+function selectMonth(i) { state.currentMonth = i; renderMonths(); renderEntries(); }
+function getKey() { return `${currentYear}-${state.currentMonth}`; }
+function getEntries() { return state.entries[getKey()] || []; }
+
+function onDiaChange() {
+  const dia = parseInt(document.getElementById('f-dia').value);
+  renderDayPanel(dia);
+  if (!dia) return;
+  const same = getEntries().filter(e => e.dia === dia);
+  if (same.length > 0) {
+    document.getElementById('f-coche').value = 'no';
+    document.getElementById('route-section').style.display = 'none';
+    showMsg('Segundo servicio del día — coche puesto a No. Cámbialo si fuera necesario.', false);
+    setTimeout(() => showMsg(''), 5000);
+  }
+  calcTotal();
+}
+
+function renderDayPanel(dia) {
+  const panel = document.getElementById('day-panel');
+  if (!dia || isNaN(dia)) { panel.style.display = 'none'; return; }
+  const entries = getEntries().filter(e => e.dia === parseInt(dia));
+  if (entries.length === 0) { panel.style.display = 'none'; return; }
+  const total = entries.reduce((s,e) => s + e.total, 0);
+  let rows = entries.map(e => {
+    const serv = state.servicios.find(s => s.id === e.servId);
+    const lug  = state.lugares.find(l => l.id === e.lugId);
+    let cocheLabel = '—';
+    if (e.coche === 'si') cocheLabel = e.precioCoche + ' €';
+    else if (e.coche === 'km') cocheLabel = e.km + ' km';
+    return `<tr style="border-top:1px solid var(--border);">
+      <td style="padding:5px 6px;">${serv ? (e.especDesc ? 'Espec.: '+e.especDesc : serv.name) : '?'}</td>
+      <td style="padding:5px 6px;color:var(--text2);">${lug ? lug.name : '?'}</td>
+      <td style="padding:5px 6px;color:var(--text2);font-size:12px;">${cocheLabel}</td>
+      <td style="padding:5px 6px;text-align:right;font-weight:500;color:var(--accent);">${e.total.toFixed(2).replace('.',',')} €</td>
+    </tr>`;
+  }).join('');
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:12px;font-weight:500;color:var(--text2);">Día ${dia} — entradas registradas</span>
+      <span style="font-size:12px;font-weight:500;color:var(--accent);">Total: ${total.toFixed(2).replace('.',',')} €</span>
+    </div>
+    <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead><tr style="font-size:11px;color:var(--text3);">
+        <th style="padding:4px 6px;text-align:left;font-weight:500;">Servicio</th>
+        <th style="padding:4px 6px;text-align:left;font-weight:500;">Lugar</th>
+        <th style="padding:4px 6px;text-align:left;font-weight:500;">Coche</th>
+        <th style="padding:4px 6px;text-align:right;font-weight:500;">Total</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+function onServicioChange() {
+  const sel = document.getElementById('f-servicio').value;
+  const serv = state.servicios.find(s => s.id === sel);
+  const isLib = serv && serv.precio === 0;
+  document.getElementById('f-especial-desc-wrap').style.display = isLib ? '' : 'none';
+  document.getElementById('f-especial-precio-wrap').style.display = isLib ? '' : 'none';
+  if (!isLib) { document.getElementById('f-manual').value = ''; document.getElementById('f-especial-desc').value = ''; }
+  calcTotal();
+}
+
+function onLugarChange() { calcTotal(); }
+
+function onCocheChange() {
+  const val = document.getElementById('f-coche').value;
+  const rs = document.getElementById('route-section');
+  if (val === 'km') {
+    if (rs.style.display === 'none' || rs.style.display === '') {
+      routeStops = []; calculatedKm = 0;
+      renderStops();
+      document.getElementById('route-info').style.display = 'none';
+      document.getElementById('km-manual-row').style.display = 'none';
+    }
+    rs.style.display = 'block';
+  } else {
+    rs.style.display = 'none';
+  }
+  calcTotal();
+}
+
+function onKmManualChange() { calculatedKm = 0; calcTotal(); }
+
+function renderStops() {
+  const list = document.getElementById('stops-list');
+  if (routeStops.length === 0) {
+    list.innerHTML = `<div class="route-stop"><div class="route-dot"></div><span style="color:var(--text2);font-size:13px;">Valladolid (origen)</span></div>
+      <div style="padding:2px 0 2px 3.5px;"><div class="stop-line"></div></div>
+      <div class="route-stop"><div class="route-dot end"></div><span style="color:var(--text3);font-size:12px;">Sin paradas aún...</span></div>`;
+    return;
+  }
+  let html = `<div class="route-stop"><div class="route-dot"></div><span style="color:var(--text2);font-size:13px;">Valladolid (origen)</span></div>`;
+  routeStops.forEach((s, i) => {
+    const serv = state.servicios.find(sv => sv.id === s.servId);
+    const lug  = state.lugares.find(l => l.id === s.lugId);
+    const desc = s.especDesc ? ' — ' + s.especDesc : '';
+    const precio = s.especPrecio > 0 ? s.especPrecio : (serv ? serv.precio : 0);
+    html += `<div style="padding:2px 0 2px 3.5px;"><div class="stop-line"></div></div>
+    <div class="route-stop">
+      <div class="route-dot"></div>
+      <span style="flex:1;font-size:13px;"><strong>${lug ? lug.name : '?'}</strong> · ${serv ? serv.name : '?'}${desc} · ${precio} €</span>
+      <button class="del-circle" onclick="removeStop(${i})">×</button>
+    </div>`;
+  });
+  html += `<div style="padding:2px 0 2px 3.5px;"><div class="stop-line"></div></div>
+    <div class="route-stop"><div class="route-dot end"></div><span style="color:var(--text2);font-size:13px;">Valladolid (vuelta)</span></div>`;
+  list.innerHTML = html;
+  calcTotal();
+}
+
+function addStop() {
+  const lugId  = document.getElementById('stop-lugar').value;
+  const servId = document.getElementById('stop-servicio').value;
+  if (!lugId || !servId) { showToast('Selecciona lugar y servicio para la parada.', 'err'); return; }
+  const serv = state.servicios.find(s => s.id === servId);
+  const especDesc   = serv && serv.precio === 0 ? document.getElementById('stop-especial-desc').value.trim() : '';
+  const especPrecio = serv && serv.precio === 0 ? parseFloat(document.getElementById('stop-especial-precio').value) || 0 : 0;
+  if (serv && serv.precio === 0 && especPrecio === 0) { showToast('Introduce el precio para el servicio Especial.', 'err'); return; }
+  routeStops.push({lugId, servId, especDesc, especPrecio});
+  document.getElementById('stop-lugar').value = '';
+  document.getElementById('stop-servicio').value = '';
+  document.getElementById('stop-especial-desc').value = '';
+  document.getElementById('stop-especial-precio').value = '';
+  document.getElementById('stop-especial-wrap').style.display = 'none';
+  calculatedKm = 0;
+  document.getElementById('route-info').style.display = 'none';
+  renderStops();
+}
+
+function onStopServicioChange() {
+  const servId = document.getElementById('stop-servicio').value;
+  const serv = state.servicios.find(s => s.id === servId);
+  document.getElementById('stop-especial-wrap').style.display = serv && serv.precio === 0 ? '' : 'none';
+}
+
+function removeStop(i) {
+  routeStops.splice(i, 1);
+  calculatedKm = 0;
+  document.getElementById('route-info').style.display = 'none';
+  renderStops();
+}
+
+const COORDS_FIJAS = {
+  'valladolid':       [-4.7245, 41.6523],
+  'arzuaga':          [-4.3239, 41.6281],
+  'olmedo':           [-4.6797, 41.2908],
+  'valbuena':         [-4.2961, 41.6106],
+  'valbuena de duero':[-4.2961, 41.6106],
+  'concejo':          [-4.5233, 41.7889],
+  'valoria la buena': [-4.5233, 41.7889],
+  'montico':          [-4.9678, 41.5081],
+  'el montico':       [-4.9678, 41.5081],
+  'af pesquera':      [-4.1789, 41.6197],
+  'pesquera de duero':[-4.1789, 41.6197],
+  'medina rioseco':   [-5.0433, 41.8797],
+  'medina de rioseco':[-5.0433, 41.8797],
+};
+
+async function geocode(place) {
+  const key = place.toLowerCase().trim();
+  if (COORDS_FIJAS[key]) return COORDS_FIJAS[key];
+  for (const [k, coords] of Object.entries(COORDS_FIJAS)) {
+    if (key.includes(k) || k.includes(key)) return coords;
+  }
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(place + ', Valladolid, España')}&format=json&limit=1&countrycodes=es`;
+    const r = await fetch(url, {headers: {'User-Agent': 'ExvallCMApp/1.0', 'Accept-Language': 'es'}});
+    const d = await r.json();
+    if (d && d.length > 0) return [parseFloat(d[0].lon), parseFloat(d[0].lat)];
+  } catch(e) {}
+  return null;
+}
+
+async function calcRoute() {
+  const btn = document.getElementById('btn-calc');
+  const infoEl = document.getElementById('route-info');
+  const manRow = document.getElementById('km-manual-row');
+  if (routeStops.length === 0) {
+    infoEl.className = 'info-box info-warn'; infoEl.style.display = 'block';
+    infoEl.textContent = 'Añade al menos una parada antes de calcular.';
+    return;
+  }
+  btn.textContent = 'Calculando...'; btn.disabled = true;
+  infoEl.style.display = 'none';
+  try {
+    const places = ['Valladolid', ...routeStops.map(s => { const l = state.lugares.find(lg => lg.id === s.lugId); return l ? l.name : ''; }), 'Valladolid'];
+    const coords = [];
+    for (const p of places) {
+      const c = await geocode(p);
+      if (!c) throw new Error(`No encontrado: "${p}".`);
+      coords.push(c);
+    }
+    const coordStr = coords.map(c => c.join(',')).join(';');
+    const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=false`;
+    const r = await fetch(url);
+    const d = await r.json();
+    if (d.code !== 'Ok') throw new Error('No se pudo calcular la ruta.');
+    calculatedKm = Math.round(d.routes[0].distance / 1000);
+    const coste = (calculatedKm * state.extras.km).toFixed(2).replace('.', ',');
+    infoEl.className = 'info-box info-ok'; infoEl.style.display = 'block';
+    infoEl.textContent = `Ruta calculada: ${calculatedKm} km → ${coste} €`;
+    manRow.style.display = 'none';
+    document.getElementById('f-km-manual').value = '';
+    calcTotal();
+  } catch(e) {
+    infoEl.className = 'info-box info-err'; infoEl.style.display = 'block';
+    infoEl.textContent = (e.message || 'Error de red.') + ' Puedes introducir los km manualmente abajo.';
+    manRow.style.display = 'block';
+    calculatedKm = 0;
+    calcTotal();
+  }
+  btn.textContent = 'Calcular km'; btn.disabled = false;
+}
+
+function calcTotal() {
+  const coche  = document.getElementById('f-coche').value;
+  const hext   = parseFloat(document.getElementById('f-hext').value)    || 0;
+  const hnoc   = parseFloat(document.getElementById('f-hnoc').value)    || 0;
+  const kmM    = parseFloat(document.getElementById('f-km-manual').value) || 0;
+  let total = 0;
+  if (coche === 'km') {
+    routeStops.forEach(s => {
+      const serv = state.servicios.find(sv => sv.id === s.servId);
+      if (serv) total += serv.precio > 0 ? serv.precio : s.especPrecio;
+    });
+    const km = calculatedKm || kmM;
+    total += km * state.extras.km;
+  } else {
+    const servId = document.getElementById('f-servicio').value;
+    const lugId  = document.getElementById('f-lugar').value;
+    const manual = parseFloat(document.getElementById('f-manual').value) || 0;
+    const serv = state.servicios.find(s => s.id === servId);
+    const lug  = state.lugares.find(l => l.id === lugId);
+    if (serv) total += serv.precio > 0 ? serv.precio : manual;
+    if (coche === 'si' && lug) total += lug.coche;
+  }
+  total += hext * state.extras.hext;
+  total += hnoc * state.extras.hnoc;
+  document.getElementById('f-total').textContent = total.toFixed(2).replace('.', ',') + ' €';
+  return total;
+}
+
+function showMsg(msg, isErr = false) {
+  const el = document.getElementById('form-msg');
+  el.textContent = msg;
+  el.className = 'form-msg' + (isErr ? ' err' : '');
+}
+
+function addEntry() {
+  const dia   = parseInt(document.getElementById('f-dia').value);
+  const servId = document.getElementById('f-servicio').value;
+  const lugId  = document.getElementById('f-lugar').value;
+  const coche  = document.getElementById('f-coche').value;
+  const hext   = parseFloat(document.getElementById('f-hext').value) || 0;
+  const hnoc   = parseFloat(document.getElementById('f-hnoc').value) || 0;
+  const manual = parseFloat(document.getElementById('f-manual').value) || 0;
+  const especDesc = document.getElementById('f-especial-desc').value.trim();
+  const kmM    = parseFloat(document.getElementById('f-km-manual').value) || 0;
+  const nota   = document.getElementById('f-nota').value.trim();
+
+  if (coche === 'km') {
+    if (routeStops.length === 0) { showMsg('Añade al menos una parada a la ruta.', true); return; }
+    if (calculatedKm === 0 && kmM === 0) { showMsg('Calcula la ruta o introduce los km manualmente.', true); return; }
+  } else {
+    if (!dia || !servId || !lugId) { showMsg('Rellena día, servicio y lugar.', true); return; }
+    // FIX 1.2: validar que el día existe en el mes/año seleccionado
+    const maxDia = new Date(currentYear, state.currentMonth + 1, 0).getDate();
+    if (dia < 1 || dia > maxDia) { showMsg(`El día debe estar entre 1 y ${maxDia} para ${MONTHS[state.currentMonth]}.`, true); return; }
+    const serv = state.servicios.find(s => s.id === servId);
+    if (serv && serv.precio === 0 && manual === 0) { showMsg('Introduce el precio para Especial.', true); return; }
+  }
+
+  const serv = state.servicios.find(s => s.id === servId);
+  const lug  = state.lugares.find(l => l.id === lugId);
+  const km    = coche === 'km' ? (calculatedKm || kmM) : 0;
+  const total = calcTotal();
+  const precioServ  = serv ? (serv.precio > 0 ? serv.precio : manual) : 0;
+  const precioCoche = coche === 'si' && lug ? lug.coche : (coche === 'km' ? parseFloat((km * state.extras.km).toFixed(2)) : 0);
+
+  const key = getKey();
+  if (!state.entries[key]) state.entries[key] = [];
+  state.entries[key].push({
+    dia, servId: coche==='km'?null:servId, lugId: coche==='km'?null:lugId,
+    coche, hext, hnoc, manual, especDesc, km, total,
+    irpf: state.irpf,
+    precioServ, precioCoche,
+    stops: coche==='km' ? [...routeStops] : [],
+    nota: nota || '',
+    createdAt: new Date().toISOString()
+  });
+  state.entries[key].sort((a, b) => a.dia - b.dia);
+  save();
+
+  showToast('Entrada añadida ✓', 'ok');
+  ['f-dia','f-hext','f-hnoc','f-manual','f-km-manual','f-especial-desc','f-nota'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-especial-desc-wrap').style.display = 'none';
+  document.getElementById('f-especial-precio-wrap').style.display = 'none';
+  routeStops = []; calculatedKm = 0;
+  document.getElementById('route-info').style.display = 'none';
+  document.getElementById('f-coche').value = 'no';
+  document.getElementById('route-section').style.display = 'none';
+  renderDayPanel(null); calcTotal(); renderEntries(); renderMonths();
+}
+
+function deleteEntry(idx) {
+  showConfirm('Eliminar entrada', '¿Eliminar esta entrada? No se puede deshacer.', 'Eliminar', () => {
+    state.entries[getKey()].splice(idx, 1);
+    save(); renderEntries(); renderMonths();
+    showToast('Entrada eliminada');
+  });
+}
+
+function renderEntries() {
+  const entries = getEntries();
+  const cont = document.getElementById('entries-container');
+  if (entries.length === 0) {
+    cont.innerHTML = `<p style="font-size:13px;color:var(--text3);padding:8px 0;">Sin entradas en ${MONTHS[state.currentMonth]} ${currentYear}.</p>`;
+    return;
+  }
+  const totalMes = entries.reduce((s, e) => s + e.total, 0);
+  const totalNeto = entries.reduce((s, e) => s + e.total * (1 - (e.irpf || state.irpf) / 100), 0);
+  // Barra de progreso hacia objetivo (si hay datos)
+  const maxPosible = 12 * Math.max(...entries.map(e => e.total), 1);
+
+  let html = `<div class="entries-header">
+    <span style="font-size:13px;color:var(--text2);">${entries.length} entrada${entries.length>1?'s':''} — ${MONTHS[state.currentMonth]} ${currentYear}</span>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <span class="badge badge-green">${totalMes.toFixed(2).replace('.',',')} €</span>
+      <span style="font-size:11px;color:var(--text3);">neto ${totalNeto.toFixed(2).replace('.',',')} €</span>
+      <button class="btn btn-secondary btn-sm" onclick="exportMesExcel()" title="Exportar mes a Excel">XLS</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportMesPDF()" title="Exportar mes a PDF">PDF</button>
+    </div>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden;">
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr>
+      <th style="width:36px;">Día</th><th>Servicio</th><th>Lugar</th>
+      <th>Coche</th><th style="text-align:right;">H.ext</th>
+      <th style="text-align:right;">H.noc</th><th style="text-align:right;">Total</th><th style="width:52px;"></th>
+    </tr></thead><tbody>`;
+
+  let prevDia = null;
+  entries.forEach((e, i) => {
+    const serv = state.servicios.find(s => s.id === e.servId);
+    const lug  = state.lugares.find(l => l.id === e.lugId);
+    const sameDia = e.dia === prevDia;
+    let cocheLabel = '—';
+    if (e.coche === 'si') cocheLabel = `${e.precioCoche} €`;
+    else if (e.coche === 'km') cocheLabel = `${e.km} km`;
+    let servLabel, lugLabel;
+    if (e.coche === 'km' && e.stops && e.stops.length > 0) {
+      servLabel = e.stops.map(s => {
+        const sv = state.servicios.find(x => x.id === s.servId);
+        return sv ? (s.especDesc ? 'Espec.:'+s.especDesc : sv.name) : '?';
+      }).join(' + ');
+      lugLabel = e.stops.map(s => {
+        const lg = state.lugares.find(x => x.id === s.lugId);
+        return lg ? lg.name : '?';
+      }).join(' → ');
+    } else {
+      servLabel = serv ? (e.especDesc ? 'Espec.: ' + e.especDesc : serv.name) : '?';
+      lugLabel  = lug ? lug.name : '?';
+    }
+    const notaHtml = e.nota ? `<span class="entry-nota">📝 ${escHtml(e.nota)}</span>` : '';
+    html += `<tr>
+      <td class="${sameDia?'td-muted':'td-mono'}">${sameDia ? '↳' : e.dia}</td>
+      <td style="font-size:12px;">${escHtml(servLabel)}${notaHtml}</td>
+      <td class="td-muted" style="font-size:12px;">${escHtml(lugLabel)}</td>
+      <td style="font-size:12px;" class="td-muted">${cocheLabel}</td>
+      <td style="text-align:right;" class="td-muted">${e.hext || '—'}</td>
+      <td style="text-align:right;" class="td-muted">${e.hnoc || '—'}</td>
+      <td class="td-accent" style="text-align:right;">${e.total.toFixed(2).replace('.',',')} €</td>
+      <td><div class="entry-actions"><button class="edit-circle" onclick="openEditModal(${i})" title="Editar">✏</button><button class="del-circle" onclick="deleteEntry(${i})" title="Eliminar">×</button></div></td>
+    </tr>`;
+    prevDia = e.dia;
+  });
+  html += '</tbody></table></div></div>';
+  cont.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// RESUMEN
+// ══════════════════════════════════════════════════════════════════════════════
+function saveBanco(i, val) {
+  if (!state.banco) state.banco = {};
+  const key = `${currentYear}-${i}`;
+  state.banco[key] = parseFloat(val) || 0;
+  save();
+  renderResumen();
+}
+
+function renderResumen() {
+  if (!state.banco) state.banco = {};
+  let totalAnual = 0, retTotal = 0, totalBanco = 0, totalMano = 0;
+  let rows = '';
+
+  MONTHS.forEach((m, i) => {
+    const key = `${currentYear}-${i}`;
+    const entries = state.entries[key] || [];
+    const bruto = entries.reduce((s, e) => s + e.total, 0);
+    const ret   = entries.reduce((s, e) => s + (e.total * (e.irpf || state.irpf) / 100), 0);
+    const banco = state.banco[key] || 0;
+    const irpfRate = state.irpf / 100;
+    const brutoCubierto = irpfRate < 1 ? banco / (1 - irpfRate) : 0;
+    const mano = Math.max(0, bruto - brutoCubierto);
+    const neto = bruto - ret;
+
+    totalAnual += bruto; retTotal += ret;
+    totalBanco += banco; totalMano += mano;
+
+    const bancoInput = `<input type="number" min="0" step="0.01" value="${banco > 0 ? banco : ''}"
+      placeholder="0,00"
+      onchange="saveBanco(${i}, this.value)"
+      style="width:90px;padding:4px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);
+             font-family:'DM Mono',monospace;font-size:12px;text-align:right;background:var(--surface);">`;
+
+    const manoColor = mano > 0 ? 'var(--warn)' : 'var(--text3)';
+    const manoText  = bruto > 0 ? mano.toFixed(2).replace('.',',') + ' €' : '—';
+    const netoText  = bruto > 0 ? neto.toFixed(2).replace('.',',') + ' €' : '—';
+
+    rows += `<tr>
+      <td>${m}</td>
+      <td class="td-mono" style="text-align:right;font-weight:${bruto>0?500:400};color:${bruto>0?'var(--text)':'var(--text3)'};">${bruto > 0 ? bruto.toFixed(2).replace('.',',') + ' €' : '—'}</td>
+      <td style="text-align:right;">${bancoInput}</td>
+      <td class="td-mono" style="text-align:right;font-weight:${mano>0?500:400};color:${manoColor};">${manoText}</td>
+      <td class="td-mono" style="text-align:right;color:var(--text2);">${netoText}</td>
+    </tr>`;
+  });
+
+  const pctIrpf = totalAnual > 0 ? Math.round(retTotal / totalAnual * 100) : 0;
+
+  document.getElementById('resumen-metrics').innerHTML =
+    `<div style="grid-column:1/-1;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-secondary btn-sm" onclick="exportResumenExcel()">Exportar XLS</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportResumenPDF()">Exportar PDF</button>
+    </div>` +
+    `<div class="metric"><div class="metric-label">Total bruto ${currentYear}</div>
+       <div class="metric-value">${totalAnual.toFixed(2).replace('.',',')} €</div>
+       ${(state.objetivo > 0) ? `
+         <div class="progress-bar-wrap"><div class="progress-bar" style="width:${Math.min(100, totalAnual / state.objetivo * 100).toFixed(1)}%"></div></div>
+         <div style="font-size:11px;color:var(--text3);margin-top:3px;">${Math.min(100, (totalAnual / state.objetivo * 100)).toFixed(0)}% del objetivo ${state.objetivo.toFixed(0)} €</div>
+       ` : ''}
+     </div>
+    <div class="metric"><div class="metric-label">Ingresado en banco</div><div class="metric-value muted">${totalBanco.toFixed(2).replace('.',',')} €</div></div>
+    <div class="metric"><div class="metric-label">Pendiente en mano</div><div class="metric-value" style="color:var(--warn);">${totalMano.toFixed(2).replace('.',',')} €</div></div>
+    <div class="metric"><div class="metric-label">Neto estimado</div><div class="metric-value green">${(totalAnual-retTotal).toFixed(2).replace('.',',')} €</div></div>
+    <div class="metric"><div class="metric-label">IRPF retenido</div><div class="metric-value muted">${retTotal.toFixed(2).replace('.',',')} €</div></div>
+    <div class="metric"><div class="metric-label">% retenido</div><div class="metric-value muted">${pctIrpf} %</div></div>`;
+
+  document.getElementById('resumen-table').innerHTML = `
+    <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">
+      Introduce cada mes lo que te han ingresado en el banco (ya con IRPF descontado).
+    </p>
+    <div style="overflow-x:auto;"><table>
+      <thead><tr>
+        <th>Mes</th>
+        <th style="text-align:right;">Bruto</th>
+        <th style="text-align:right;">Banco (neto)</th>
+        <th style="text-align:right;">En mano</th>
+        <th style="text-align:right;">Neto total</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td>Total ${currentYear}</td>
+        <td class="td-mono" style="text-align:right;">${totalAnual.toFixed(2).replace('.',',')} €</td>
+        <td class="td-mono" style="text-align:right;color:var(--text2);">${totalBanco.toFixed(2).replace('.',',')} €</td>
+        <td class="td-mono" style="text-align:right;color:var(--warn);font-weight:500;">${totalMano.toFixed(2).replace('.',',')} €</td>
+        <td class="td-mono" style="text-align:right;color:var(--success);font-weight:500;">${(totalAnual-retTotal).toFixed(2).replace('.',',')} €</td>
+      </tr></tfoot>
+    </table></div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN
+// ══════════════════════════════════════════════════════════════════════════════
+function renderConfig() {
+  document.getElementById('cfg-hext').value    = state.extras.hext;
+  document.getElementById('cfg-hnoc').value    = state.extras.hnoc;
+  document.getElementById('cfg-km').value      = state.extras.km;
+  document.getElementById('cfg-objetivo').value = state.objetivo || '';
+  renderNube(); // 4.2 — actualizar estado de sesión nube
+
+  const hist = (state.irpfHist || []).slice().reverse();
+  document.getElementById('irpf-hist').innerHTML = hist.length === 0
+    ? '<span style="font-size:13px;color:var(--text3);">Sin cambios registrados aún.</span>'
+    : hist.map(h => `<div class="hist-entry"><span>${h.valor}%</span><span>desde ${h.desde}</span></div>`).join('');
+
+  document.getElementById('servicios-list').innerHTML = state.servicios.map((s, i) => `
+    <div class="config-item">
+      <span>${escHtml(s.name)}</span>
+      <span class="tag">${s.precio > 0 ? s.precio + ' €' : 'precio libre'}</span>
+      <input type="number" value="${s.precio}" min="0" step="1" onchange="updateServPrecio(${i},this.value)" title="Cambiar precio">
+      ${i >= 5 ? `<button class="del-circle" onclick="delServicio(${i})">×</button>` : '<span style="width:22px;"></span>'}
+    </div>`).join('');
+
+  document.getElementById('lugares-list').innerHTML = state.lugares.map((l, i) => `
+    <div class="config-item">
+      <span>${escHtml(l.name)}</span>
+      <span class="tag">coche ${l.coche} €</span>
+      <input type="number" value="${l.coche}" min="0" step="1" onchange="updateLugCoche(${i},this.value)" title="Cambiar precio coche">
+      ${i >= 8 ? `<button class="del-circle" onclick="delLugar(${i})">×</button>` : '<span style="width:22px;"></span>'}
+    </div>`).join('');
+
+  renderCfgProfiles();
+}
+
+function updateServPrecio(i, v) { state.servicios[i].precio = parseFloat(v) || 0; save(); renderConfig(); populateDropdowns(); }
+function updateLugCoche(i, v)   { state.lugares[i].coche   = parseFloat(v) || 0; save(); renderConfig(); populateDropdowns(); }
+
+function addServicio() {
+  const name   = document.getElementById('new-serv-name').value.trim();
+  const precio = parseFloat(document.getElementById('new-serv-precio').value) || 0;
+  if (!name) return;
+  state.servicios.push({id: crypto.randomUUID(), name, precio});
+  save(); renderConfig(); populateDropdowns();
+  document.getElementById('new-serv-name').value = '';
+  document.getElementById('new-serv-precio').value = '';
+  showToast('Servicio añadido', 'ok');
+}
+
+function addLugar() {
+  const name  = document.getElementById('new-lug-name').value.trim();
+  const coche = parseFloat(document.getElementById('new-lug-coche').value) || 0;
+  if (!name) return;
+  state.lugares.push({id: crypto.randomUUID(), name, coche});
+  save(); renderConfig(); populateDropdowns();
+  document.getElementById('new-lug-name').value = '';
+  document.getElementById('new-lug-coche').value = '';
+  showToast('Lugar añadido', 'ok');
+}
+
+function delServicio(i) {
+  showConfirm('Eliminar servicio', `¿Eliminar el servicio "${state.servicios[i].name}"?`, 'Eliminar', () => {
+    state.servicios.splice(i, 1); save(); renderConfig(); populateDropdowns();
+    showToast('Servicio eliminado');
+  });
+}
+function delLugar(i) {
+  showConfirm('Eliminar lugar', `¿Eliminar el lugar "${state.lugares[i].name}"?`, 'Eliminar', () => {
+    state.lugares.splice(i, 1); save(); renderConfig(); populateDropdowns();
+    showToast('Lugar eliminado');
+  });
+}
+
+function confirmDeleteAllData() {
+  showConfirm('Borrar todos los datos', 'Se eliminarán todas las entradas, banco y configuración de este perfil. No se puede deshacer.', 'Borrar todo', async () => {
+    const profiles = await getProfiles();
+    const profile = profiles.find(p => p.id === activeProfileId);
+    state = DEFAULT_STATE();
+    state.nombre = profile ? profile.name : '';
+    save();
+    document.getElementById('irpf-input').value = state.irpf;
+    renderMonths(); renderEntries();
+    showToast('Datos borrados');
+  });
+}
+
+function populateDropdowns() {
+  const servOpts = '<option value="">— Selecciona —</option>' +
+    state.servicios.map(s => `<option value="${s.id}">${escHtml(s.name)}</option>`).join('');
+  const lugOpts = '<option value="">— Selecciona —</option>' +
+    state.lugares.map(l => `<option value="${l.id}">${escHtml(l.name)}</option>`).join('');
+  document.getElementById('f-servicio').innerHTML = servOpts;
+  document.getElementById('f-lugar').innerHTML = lugOpts;
+  document.getElementById('stop-servicio').innerHTML = servOpts;
+  document.getElementById('stop-lugar').innerHTML = lugOpts;
+  document.getElementById('stop-servicio').onchange = onStopServicioChange;
+}
+
+function editName() {
+  const display = document.getElementById('app-name-display');
+  const input = document.getElementById('app-name-input');
+  input.value = state.nombre || 'Control Monetario Exvall';
+  display.style.display = 'none';
+  input.style.display = 'inline-block';
+  input.focus(); input.select();
+}
+
+function saveName() {
+  const display = document.getElementById('app-name-display');
+  const input = document.getElementById('app-name-input');
+  const nombre = input.value.trim() || 'Control Monetario Exvall';
+  state.nombre = nombre;
+  save();
+  display.textContent = nombre;
+  document.getElementById('page-title').textContent = nombre ;
+  display.style.display = '';
+  input.style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PWA INSTALL
+// ══════════════════════════════════════════════════════════════════════════════
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('pwa-install-btn').style.display = 'block';
+});
+window.addEventListener('appinstalled', () => {
+  document.getElementById('pwa-install-btn').style.display = 'none';
+  deferredPrompt = null;
+});
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BACKUP / RESTORE
+// ══════════════════════════════════════════════════════════════════════════════
+async function exportBackup() {
+  const profiles = await getProfiles();
+  const profile = profiles.find(p => p.id === activeProfileId);
+  const nombre = state.nombre || (profile ? profile.name : 'ExvallCM');
+  const fecha = new Date().toLocaleDateString('es-ES').replace(/\//g,'-');
+  const json = JSON.stringify(state, null, 2);
+  const blob = new Blob([json], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${nombre}_backup_${fecha}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('Backup exportado', 'ok');
+}
+
+async function exportBackupAndShare() {
+  const profiles = await getProfiles();
+  const profile = profiles.find(p => p.id === activeProfileId);
+  const nombre = state.nombre || (profile ? profile.name : 'ExvallCM');
+  const fecha = new Date().toLocaleDateString('es-ES').replace(/\//g,'-');
+  const fileName = `${nombre}_backup_${fecha}.json`;
+  const json = JSON.stringify(state, null, 2);
+  const blob = new Blob([json], {type: 'application/json'});
+
+  // Intentar Web Share API (funciona en iOS Safari 15+)
+  if (navigator.canShare && navigator.share) {
+    try {
+      const file = new File([blob], fileName, {type: 'application/json'});
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Control Monetario Exvall — Copia de seguridad',
+          text: `Copia de seguridad de ${nombre} — ${fecha}`
+        });
+        showToast('Backup compartido', 'ok');
+        return;
+      }
+    } catch(e) {
+      if (e.name !== 'AbortError') {
+        // Si falla la API de compartir, hacer descarga normal
+      } else {
+        return; // Usuario canceló
+      }
+    }
+  }
+
+  // Fallback: descarga directa (funciona en todos los navegadores)
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); document.body.removeChild(a); }, 500);
+  showToast('Backup exportado', 'ok');
+
+  // En Safari sin Web Share, mostrar aviso extra
+  if (isSafari() && !navigator.share) {
+    setTimeout(() => showToast('Guarda el archivo en iCloud o envíatelo', 'ok'), 3200);
+  }
+}
+
+function importBackup(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!imported.entries) throw new Error('Archivo no válido');
+      state.entries = imported.entries || {};
+      state.banco   = imported.banco   || {};
+      if (imported.irpf)     state.irpf     = imported.irpf;
+      if (imported.irpfHist) state.irpfHist = imported.irpfHist;
+      if (imported.nombre)   state.nombre   = imported.nombre;
+      if (imported.servicios) state.servicios = imported.servicios;
+      if (imported.lugares)   state.lugares   = imported.lugares;
+      if (imported.extras)    state.extras    = imported.extras;
+      save();
+      renderMonths(); renderEntries(); populateDropdowns();
+      document.getElementById('irpf-input').value = state.irpf;
+      if (state.nombre) document.getElementById('app-name-display').textContent = state.nombre;
+      showToast('Datos importados correctamente', 'ok');
+    } catch(err) {
+      showToast('Error al importar: ' + err.message, 'err');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EXPORTACIÓN
+// ══════════════════════════════════════════════════════════════════════════════
+// FIX 1.3: normalizar caracteres especiales para jsPDF + Helvetica
+// Helvetica no incluye vocales con tilde ni ñ — sustituimos antes de doc.text()
+function pdfTxt(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+    .replace(/Á/g,'A').replace(/É/g,'E').replace(/Í/g,'I').replace(/Ó/g,'O').replace(/Ú/g,'U')
+    .replace(/ñ/g,'n').replace(/Ñ/g,'N').replace(/ü/g,'u').replace(/Ü/g,'U')
+    .replace(/¿/g,'?').replace(/¡/g,'!').replace(/€/g,'EUR').replace(/–/g,'-').replace(/—/g,'-');
+}
+
+function buildMesRows(monthIndex) {
+  const key = `${currentYear}-${monthIndex}`;
+  const entries = state.entries[key] || [];
+  return entries.map(e => {
+    const serv = state.servicios.find(s => s.id === e.servId);
+    const lug  = state.lugares.find(l => l.id === e.lugId);
+    let servLabel, lugLabel;
+    if (e.coche === 'km' && e.stops && e.stops.length > 0) {
+      servLabel = e.stops.map(s => { const sv = state.servicios.find(x=>x.id===s.servId); return sv?(s.especDesc?'Espec.:'+s.especDesc:sv.name):'?'; }).join(' + ');
+      lugLabel  = e.stops.map(s => { const lg = state.lugares.find(x=>x.id===s.lugId); return lg?lg.name:'?'; }).join(' → ');
+    } else {
+      servLabel = serv ? (e.especDesc ? 'Especial: '+e.especDesc : serv.name) : '?';
+      lugLabel  = lug ? lug.name : '?';
+    }
+    let cocheLabel = 'No';
+    if (e.coche === 'si') cocheLabel = e.precioCoche + ' € fijo';
+    else if (e.coche === 'km') cocheLabel = e.km + ' km';
+    return {
+      'Día': e.dia,
+      'Servicio': servLabel,
+      'Lugar': lugLabel,
+      'Coche': cocheLabel,
+      'H. extra': e.hext || 0,
+      'H. nocturnas': e.hnoc || 0,
+      'Total (€)': parseFloat(e.total.toFixed(2)),
+      'IRPF (%)': (e.irpf || state.irpf) + '%',
+      'Neto (€)': parseFloat((e.total * (1 - (e.irpf || state.irpf)/100)).toFixed(2)),
+      'Nota': e.nota || ''
+    };
+  });
+}
+
+function exportMesExcel() {
+  const mes = MONTHS[state.currentMonth];
+  const rows = buildMesRows(state.currentMonth);
+  if (rows.length === 0) { showToast('Sin datos en este mes', 'err'); return; }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [6,20,20,14,10,12,12,10,12,20].map(w=>({wch:w}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, mes);
+  const fileName = `ExvallCM_${mes}_${currentYear}.xlsx`;
+  // Safari-safe: usar writeFile con tipo arraybuffer y crear blob manualmente
+  try {
+    XLSX.writeFile(wb, fileName);
+  } catch(e) {
+    // Fallback para Safari
+    const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    const blob = new Blob([wbout], {type:'application/octet-stream'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fileName;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+  }
+  showToast('Excel exportado', 'ok');
+}
+
+function exportMesPDF() {
+  const mes = MONTHS[state.currentMonth];
+  const rows = buildMesRows(state.currentMonth);
+  if (rows.length === 0) { showToast('Sin datos en este mes', 'err'); return; }
+  const nombre = state.nombre || 'Control Monetario Exvall';
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  let y = 18;
+  doc.setFillColor(30, 61, 41);
+  doc.rect(0, 0, W, 14, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(13); doc.setFont('helvetica','bold');
+  doc.text(pdfTxt(`${nombre} — ${mes} ${currentYear}`), 10, 9.5);
+  doc.setTextColor(30,61,41);
+  doc.setFontSize(9); doc.setFont('helvetica','normal');
+  const cols = ['Dia','Servicio','Lugar','Coche','H.ext','H.noc','Total','Neto'];
+  const widths = [12, 52, 42, 30, 12, 12, 22, 22];
+  let x = 10;
+  doc.setFillColor(240,239,233); doc.rect(8, y-5, W-16, 8, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  cols.forEach((c,i) => { doc.text(c, x+1, y); x += widths[i]; });
+  y += 5;
+  doc.setFont('helvetica','normal');
+  rows.forEach((r, ri) => {
+    if (y > 185) { doc.addPage(); y = 18; }
+    if (ri % 2 === 0) { doc.setFillColor(248,248,244); doc.rect(8, y-4, W-16, 7, 'F'); }
+    x = 10;
+    const vals = [
+      String(r['Día']),
+      pdfTxt(r['Servicio'].length>28 ? r['Servicio'].substring(0,26)+'...' : r['Servicio']),
+      pdfTxt(r['Lugar'].length>22 ? r['Lugar'].substring(0,20)+'...' : r['Lugar']),
+      pdfTxt(r['Coche']),
+      r['H. extra'] ? String(r['H. extra']) : '-',
+      r['H. nocturnas'] ? String(r['H. nocturnas']) : '-',
+      r['Total (€)'].toFixed(2)+' EUR',
+      r['Neto (€)'].toFixed(2)+' EUR'
+    ];
+    vals.forEach((v,i) => { doc.text(v, x+1, y); x += widths[i]; });
+    y += 7;
+  });
+  y += 4;
+  doc.setDrawColor(200,200,190); doc.line(8, y-2, W-8, y-2);
+  const totalBruto = rows.reduce((s,r)=>s+r['Total (€)'],0);
+  const totalNeto  = rows.reduce((s,r)=>s+r['Neto (€)'],0);
+  doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text(pdfTxt(`Total bruto: ${totalBruto.toFixed(2)} EUR`), W-80, y+4);
+  doc.text(pdfTxt(`Total neto: ${totalNeto.toFixed(2)} EUR`), W-40, y+4);
+  const pdfFileName = `ExvallCM_${mes}_${currentYear}.pdf`;
+  try {
+    doc.save(pdfFileName);
+  } catch(e) {
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = pdfFileName;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+  }
+  showToast('PDF exportado', 'ok');
+}
+
+function exportResumenExcel() {
+  const nombre = state.nombre || 'Control Monetario Exvall';
+  const rows = MONTHS.map((m, i) => {
+    const key = `${currentYear}-${i}`;
+    const entries = state.entries[key] || [];
+    const bruto = entries.reduce((s,e) => s+e.total, 0);
+    const ret   = entries.reduce((s,e) => s+(e.total*(e.irpf||state.irpf)/100), 0);
+    const banco = (state.banco && state.banco[key]) || 0;
+    const irpfRate = state.irpf/100;
+    const brutoCubierto = irpfRate<1 ? banco/(1-irpfRate) : 0;
+    const mano = Math.max(0, bruto - brutoCubierto);
+    return {
+      'Mes': m,
+      'Total bruto (€)': parseFloat(bruto.toFixed(2)),
+      'Banco ingresado (€)': parseFloat(banco.toFixed(2)),
+      'A cobrar en mano (€)': parseFloat(mano.toFixed(2)),
+      'IRPF retenido (€)': parseFloat(ret.toFixed(2)),
+      'Neto estimado (€)': parseFloat((bruto-ret).toFixed(2))
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [14,16,20,20,18,16].map(w=>({wch:w}));
+  const wb2 = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb2, ws, 'Resumen');
+  MONTHS.forEach((m,i) => {
+    const mesRows = buildMesRows(i);
+    if (mesRows.length > 0) {
+      const ws2 = XLSX.utils.json_to_sheet(mesRows);
+      XLSX.utils.book_append_sheet(wb2, ws2, m);
+    }
+  });
+  const xlsFileName = `ExvallCM_Anual_${currentYear}.xlsx`;
+  try {
+    XLSX.writeFile(wb2, xlsFileName);
+  } catch(e) {
+    const wbout = XLSX.write(wb2, {bookType:'xlsx', type:'array'});
+    const blob = new Blob([wbout], {type:'application/octet-stream'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = xlsFileName;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+  }
+  showToast('Excel anual exportado', 'ok');
+}
+
+function exportResumenPDF() {
+  const nombre = state.nombre || 'Control Monetario Exvall';
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  doc.setFillColor(30,61,41); doc.rect(0,0,W,14,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(13); doc.setFont('helvetica','bold');
+  doc.text(pdfTxt(`${nombre} — Resumen ${currentYear}`), 10, 9.5);
+  doc.setTextColor(100,100,100); doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text(`IRPF: ${state.irpf}%`, 10, 20);
+  let y = 30;
+  const cols = ['Mes','Bruto','Banco (neto)','En mano','Neto total'];
+  const widths = [30,35,40,35,35];
+  doc.setFillColor(240,239,233); doc.rect(8,y-5,W-16,8,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  let x=10;
+  cols.forEach((c,i)=>{ doc.text(pdfTxt(c),x+1,y); x+=widths[i]; });
+  y+=5;
+  let totalBruto=0,totalBanco=0,totalMano=0,totalNeto=0;
+  MONTHS.forEach((m,i)=>{
+    const key=`${currentYear}-${i}`;
+    const entries=state.entries[key]||[];
+    const bruto=entries.reduce((s,e)=>s+e.total,0);
+    const ret=entries.reduce((s,e)=>s+(e.total*(e.irpf||state.irpf)/100),0);
+    const banco=(state.banco&&state.banco[key])||0;
+    const irpfRate=state.irpf/100;
+    const mano=Math.max(0,bruto-(irpfRate<1?banco/(1-irpfRate):0));
+    totalBruto+=bruto; totalBanco+=banco; totalMano+=mano; totalNeto+=(bruto-ret);
+    if(i%2===0){doc.setFillColor(248,248,244);doc.rect(8,y-4,W-16,7,'F');}
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    x=10;
+    const vals=[pdfTxt(m),
+      bruto>0?bruto.toFixed(2)+' EUR':'-',
+      banco>0?banco.toFixed(2)+' EUR':'-',
+      bruto>0?mano.toFixed(2)+' EUR':'-',
+      bruto>0?(bruto-ret).toFixed(2)+' EUR':'-'
+    ];
+    vals.forEach((v,j)=>{ doc.text(v,x+1,y); x+=widths[j]; });
+    y+=7;
+  });
+  y+=4;
+  doc.setDrawColor(180,180,170); doc.line(8,y-2,W-8,y-2);
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); y+=5;
+  x=10;
+  [pdfTxt('Total'),totalBruto.toFixed(2)+' EUR',totalBanco.toFixed(2)+' EUR',totalMano.toFixed(2)+' EUR',totalNeto.toFixed(2)+' EUR']
+    .forEach((v,j)=>{ doc.text(v,x+1,y); x+=widths[j]; });
+  const pdfResFileName = `ExvallCM_Resumen_${currentYear}.pdf`;
+  try {
+    doc.save(pdfResFileName);
+  } catch(e) {
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = pdfResFileName;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+  }
+  showToast('PDF resumen exportado', 'ok');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EDITAR ENTRADA
+// ══════════════════════════════════════════════════════════════════════════════
+let _editIdx = null;
+
+function openEditModal(idx) {
+  const entries = getEntries();
+  const e = entries[idx];
+  if (!e) return;
+  _editIdx = idx;
+
+  // Rellenar dropdowns del modal con los servicios y lugares actuales
+  const servOpts = state.servicios.map(s => `<option value="${s.id}">${escHtml(s.name)}</option>`).join('');
+  const lugOpts  = state.lugares.map(l  => `<option value="${l.id}">${escHtml(l.name)}</option>`).join('');
+  document.getElementById('edit-servicio').innerHTML = servOpts;
+  document.getElementById('edit-lugar').innerHTML    = lugOpts;
+
+  // Rellenar valores
+  document.getElementById('edit-dia').value   = e.dia || '';
+  document.getElementById('edit-hext').value  = e.hext || '';
+  document.getElementById('edit-hnoc').value  = e.hnoc || '';
+  document.getElementById('edit-nota').value  = e.nota || '';
+  document.getElementById('edit-coche').value = e.coche || 'no';
+  document.getElementById('edit-km').value    = e.km || '';
+
+  if (e.servId) document.getElementById('edit-servicio').value = e.servId;
+  if (e.lugId)  document.getElementById('edit-lugar').value    = e.lugId;
+
+  // Especial
+  const serv = state.servicios.find(s => s.id === e.servId);
+  const isEspec = serv && serv.precio === 0;
+  document.getElementById('edit-especial-desc-wrap').style.display  = isEspec ? '' : 'none';
+  document.getElementById('edit-especial-precio-wrap').style.display = isEspec ? '' : 'none';
+  document.getElementById('edit-especial-desc').value  = e.especDesc || '';
+  document.getElementById('edit-manual').value         = e.manual || '';
+
+  // Km
+  document.getElementById('edit-km-wrap').style.display = e.coche === 'km' ? '' : 'none';
+
+  calcEditTotal();
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').style.display = 'none';
+  _editIdx = null;
+}
+
+function onEditServicioChange() {
+  const servId = document.getElementById('edit-servicio').value;
+  const serv = state.servicios.find(s => s.id === servId);
+  const isEspec = serv && serv.precio === 0;
+  document.getElementById('edit-especial-desc-wrap').style.display  = isEspec ? '' : 'none';
+  document.getElementById('edit-especial-precio-wrap').style.display = isEspec ? '' : 'none';
+  if (!isEspec) {
+    document.getElementById('edit-manual').value = '';
+    document.getElementById('edit-especial-desc').value = '';
+  }
+  calcEditTotal();
+}
+
+function onEditLugarChange() { calcEditTotal(); }
+
+function onEditCocheChange() {
+  const val = document.getElementById('edit-coche').value;
+  document.getElementById('edit-km-wrap').style.display = val === 'km' ? '' : 'none';
+  calcEditTotal();
+}
+
+function calcEditTotal() {
+  const servId = document.getElementById('edit-servicio').value;
+  const lugId  = document.getElementById('edit-lugar').value;
+  const coche  = document.getElementById('edit-coche').value;
+  const hext   = parseFloat(document.getElementById('edit-hext').value)  || 0;
+  const hnoc   = parseFloat(document.getElementById('edit-hnoc').value)  || 0;
+  const manual = parseFloat(document.getElementById('edit-manual').value) || 0;
+  const km     = parseFloat(document.getElementById('edit-km').value)     || 0;
+
+  const serv = state.servicios.find(s => s.id === servId);
+  const lug  = state.lugares.find(l  => l.id === lugId);
+
+  let total = 0;
+  if (serv) total += serv.precio > 0 ? serv.precio : manual;
+  if (coche === 'si' && lug) total += lug.coche;
+  if (coche === 'km') total += km * state.extras.km;
+  total += hext * state.extras.hext;
+  total += hnoc * state.extras.hnoc;
+
+  document.getElementById('edit-total-preview').textContent = total.toFixed(2).replace('.', ',') + ' €';
+  return total;
+}
+
+function saveEditEntry() {
+  if (_editIdx === null) return;
+  const entries = getEntries();
+  const e = entries[_editIdx];
+
+  const dia     = parseInt(document.getElementById('edit-dia').value);
+  const servId  = document.getElementById('edit-servicio').value;
+  const lugId   = document.getElementById('edit-lugar').value;
+  const coche   = document.getElementById('edit-coche').value;
+  const hext    = parseFloat(document.getElementById('edit-hext').value)  || 0;
+  const hnoc    = parseFloat(document.getElementById('edit-hnoc').value)  || 0;
+  const manual  = parseFloat(document.getElementById('edit-manual').value) || 0;
+  const km      = parseFloat(document.getElementById('edit-km').value)     || 0;
+  const nota    = document.getElementById('edit-nota').value.trim();
+  const especDesc = document.getElementById('edit-especial-desc').value.trim();
+
+  if (!dia || !servId || !lugId) {
+    showToast('Rellena día, servicio y lugar.', 'err');
+    return;
+  }
+  // FIX 1.2: validar que el día existe en el mes/año seleccionado
+  const maxDiaEdit = new Date(currentYear, state.currentMonth + 1, 0).getDate();
+  if (dia < 1 || dia > maxDiaEdit) {
+    showToast(`El día debe estar entre 1 y ${maxDiaEdit} para ${MONTHS[state.currentMonth]}.`, 'err');
+    return;
+  }
+
+  const serv = state.servicios.find(s => s.id === servId);
+  const lug  = state.lugares.find(l  => l.id === lugId);
+  const total = calcEditTotal();
+  const precioCoche = coche === 'si' && lug ? lug.coche : (coche === 'km' ? parseFloat((km * state.extras.km).toFixed(2)) : 0);
+
+  // Actualizar la entrada conservando campos que no se editan (stops, createdAt...)
+  entries[_editIdx] = {
+    ...e,
+    dia,
+    servId,
+    lugId,
+    coche,
+    hext,
+    hnoc,
+    manual,
+    especDesc,
+    km: coche === 'km' ? km : 0,
+    total,
+    irpf: state.irpf,
+    precioServ: serv ? (serv.precio > 0 ? serv.precio : manual) : 0,
+    precioCoche,
+    nota,
+    editedAt: new Date().toISOString()
+  };
+
+  // Reordenar por día
+  entries.sort((a, b) => a.dia - b.dia);
+  state.entries[getKey()] = entries;
+  save();
+  closeEditModal();
+  renderEntries();
+  renderMonths();
+  showToast('Entrada actualizada ✓', 'ok');
+}
+
+// Añadir listeners al modal para recalcular total en tiempo real
+document.addEventListener('DOMContentLoaded', () => {
+  ['edit-hext','edit-hnoc','edit-manual','edit-km'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', calcEditTotal);
+  });
+
+  // 3.2 — Atajos de teclado globales
+  document.addEventListener('keydown', e => {
+    // Escape: cierra cualquier modal abierto
+    if (e.key === 'Escape') {
+      const modals = [
+        { id: 'edit-modal',        fn: closeEditModal        },
+        { id: 'new-profile-modal', fn: closeNewProfileModal  },
+        { id: 'confirm-modal',     fn: confirmCancel         },
+      ];
+      for (const { id, fn } of modals) {
+        const el = document.getElementById(id);
+        if (el && el.style.display === 'flex') { fn(); break; }
+      }
+    }
+    // Enter en confirm-modal: confirma la acción (sin propagar a inputs)
+    if (e.key === 'Enter') {
+      const confirmModal = document.getElementById('confirm-modal');
+      if (confirmModal && confirmModal.style.display === 'flex') {
+        e.preventDefault();
+        confirmOk();
+      }
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3.3 — INDICADOR DE MODO OFFLINE
+// ══════════════════════════════════════════════════════════════════════════════
+function actualizarEstadoConexion() {
+  const badge = document.getElementById('offline-badge');
+  const btnCalc = document.getElementById('btn-calc');
+  const online = navigator.onLine;
+  if (badge) badge.classList.toggle('visible', !online);
+  if (btnCalc) {
+    btnCalc.disabled = !online;
+    btnCalc.title = online ? '' : 'Sin conexión — introduce los km manualmente';
+    if (!online) {
+      // Mostrar el campo manual automáticamente si está en modo km
+      const manRow = document.getElementById('km-manual-row');
+      if (manRow) manRow.style.display = 'block';
+    }
+  }
+}
+window.addEventListener('online',  actualizarEstadoConexion);
+window.addEventListener('offline', actualizarEstadoConexion);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ARRANQUE
+// ══════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+// FASE 4 — SUPABASE: BACKUP EN LA NUBE
+// ══════════════════════════════════════════════════════════════════════════════
+const SUPA_URL = 'https://bmezfzvbvuqehrfvwswp.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtZXpmenZidnVxZWhyZnZ3c3dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyODM5MzIsImV4cCI6MjA5Mjg1OTkzMn0.M-XPCeeJZJnqxCoW7QQXewlj7pnsR9xvE5PLb1fKeJI';
+
+let _supa = null;
+
+// Inicializa el cliente Supabase (lazy, solo cuando se necesita)
+async function getSupa() {
+  if (_supa) return _supa;
+  const { createClient } = window.supabase;
+  _supa = createClient(SUPA_URL, SUPA_KEY);
+  return _supa;
+}
+
+// Devuelve la sesión activa o null
+async function nubeGetSession() {
+  try {
+    const supa = await getSupa();
+    const { data } = await supa.auth.getSession();
+    return data?.session || null;
+  } catch(e) { return null; }
+}
+
+// Renderiza el estado de la sección nube según sesión
+async function renderNube() {
+  const session = await nubeGetSession();
+  const loginSection   = document.getElementById('nube-login-section');
+  const sessionSection = document.getElementById('nube-session-section');
+  if (!loginSection || !sessionSection) return;
+
+  if (session) {
+    loginSection.style.display   = 'none';
+    sessionSection.style.display = 'block';
+    document.getElementById('nube-user-email').textContent = session.user.email;
+    // Buscar fecha del último backup
+    try {
+      const supa = await getSupa();
+      const { data } = await supa
+        .from('backups')
+        .select('updated_at')
+        .eq('profile_id', activeProfileId)
+        .single();
+      if (data?.updated_at) {
+        const fecha = new Date(data.updated_at).toLocaleString('es-ES');
+        document.getElementById('nube-ultimo-backup').textContent = `Último backup: ${fecha}`;
+      } else {
+        document.getElementById('nube-ultimo-backup').textContent = 'Sin backups en la nube aún';
+      }
+    } catch(e) {
+      document.getElementById('nube-ultimo-backup').textContent = '';
+    }
+  } else {
+    loginSection.style.display   = 'block';
+    sessionSection.style.display = 'none';
+  }
+}
+
+// Login por magic link
+async function nubeLogin() {
+  const email = document.getElementById('nube-email').value.trim();
+  const msgEl = document.getElementById('nube-login-msg');
+  const btn   = document.getElementById('btn-nube-login');
+  if (!email || !email.includes('@')) {
+    nubeMsg('nube-login-msg', 'Introduce un email válido.', 'err');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+  try {
+    const supa = await getSupa();
+    const { error } = await supa.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.href }
+    });
+    if (error) throw error;
+    nubeMsg('nube-login-msg', `✓ Enlace enviado a ${email}. Revisa tu correo y pulsa el enlace para iniciar sesión.`, 'ok');
+  } catch(e) {
+    nubeMsg('nube-login-msg', 'Error al enviar el enlace: ' + (e.message || 'inténtalo de nuevo.'), 'err');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Enviar enlace';
+}
+
+// Cerrar sesión
+async function nubeLogout() {
+  const supa = await getSupa();
+  await supa.auth.signOut();
+  _supa = null;
+  renderNube();
+  showToast('Sesión cerrada', 'ok');
+}
+
+// Subir backup del perfil activo a Supabase
+async function nubeSubir() {
+  const session = await nubeGetSession();
+  if (!session) { showToast('Inicia sesión primero', 'err'); return; }
+  if (!activeProfileId) { showToast('Selecciona un perfil primero', 'err'); return; }
+
+  nubeMsg('nube-msg', 'Subiendo...', 'info');
+  try {
+    const supa = await getSupa();
+    const { error } = await supa
+      .from('backups')
+      .upsert({
+        user_id:    session.user.id,
+        profile_id: activeProfileId,
+        data:       state,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,profile_id' });
+    if (error) throw error;
+    nubeMsg('nube-msg', '✓ Backup subido correctamente a la nube.', 'ok');
+    renderNube();
+    showToast('Backup en la nube actualizado', 'ok');
+  } catch(e) {
+    nubeMsg('nube-msg', 'Error al subir: ' + (e.message || 'inténtalo de nuevo.'), 'err');
+  }
+}
+
+// Restaurar backup desde Supabase
+async function nubeRestaurar() {
+  const session = await nubeGetSession();
+  if (!session) { showToast('Inicia sesión primero', 'err'); return; }
+  if (!activeProfileId) { showToast('Selecciona un perfil primero', 'err'); return; }
+
+  nubeMsg('nube-msg', 'Buscando backup...', 'info');
+  try {
+    const supa = await getSupa();
+    const { data, error } = await supa
+      .from('backups')
+      .select('data, updated_at')
+      .eq('profile_id', activeProfileId)
+      .single();
+    if (error || !data) throw new Error('No se encontró ningún backup en la nube para este perfil.');
+
+    const fecha      = new Date(data.updated_at).toLocaleString('es-ES');
+    const nEntradas  = Object.values(data.data?.entries || {}).reduce((s, a) => s + a.length, 0);
+    const resumen    = `Backup del ${fecha} — ${nEntradas} entrada${nEntradas !== 1 ? 's' : ''}.`;
+
+    showConfirm(
+      'Restaurar desde la nube',
+      `${resumen}\n¿Sobreescribir los datos actuales de este perfil con este backup?`,
+      'Restaurar',
+      async () => {
+        const importado = data.data;
+        state.entries   = importado.entries   || {};
+        state.banco     = importado.banco     || {};
+        if (importado.irpf)      state.irpf      = importado.irpf;
+        if (importado.irpfHist)  state.irpfHist  = importado.irpfHist;
+        if (importado.nombre)    state.nombre    = importado.nombre;
+        if (importado.servicios) state.servicios = importado.servicios;
+        if (importado.lugares)   state.lugares   = importado.lugares;
+        if (importado.extras)    state.extras    = importado.extras;
+        if (importado.objetivo !== undefined) state.objetivo = importado.objetivo;
+        await saveProfile();
+        renderMonths(); renderEntries(); populateDropdowns();
+        document.getElementById('irpf-input').value = state.irpf;
+        if (state.nombre) document.getElementById('app-name-display').textContent = state.nombre;
+        nubeMsg('nube-msg', `✓ Datos restaurados desde el backup del ${fecha}.`, 'ok');
+        showToast('Datos restaurados desde la nube', 'ok');
+      }
+    );
+  } catch(e) {
+    nubeMsg('nube-msg', e.message || 'Error al restaurar.', 'err');
+  }
+}
+
+// Helper para mostrar mensajes en la sección nube
+function nubeMsg(elId, texto, tipo) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const colores = { ok: 'var(--success)', err: 'var(--danger)', info: 'var(--text2)' };
+  el.style.color   = colores[tipo] || 'var(--text2)';
+  el.textContent   = texto;
+  el.style.display = 'block';
+}
+
+// Detectar sesión al volver del magic link (hash de Supabase en la URL)
+async function detectarSesionMagicLink() {
+  try {
+    const supa = await getSupa();
+    // Supabase maneja automáticamente el hash de la URL al inicializar
+    supa.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        // Limpiar el hash de la URL sin recargar
+        if (window.location.hash.includes('access_token')) {
+          history.replaceState(null, '', window.location.pathname);
+        }
+        renderNube();
+        showToast('Sesión iniciada — ya puedes subir tus backups', 'ok');
+      }
+      if (event === 'SIGNED_OUT') {
+        renderNube();
+      }
+    });
+  } catch(e) {}
+}
+
+(async function init() {
+  initDarkMode();
+  actualizarEstadoConexion();
+  detectarSesionMagicLink(); // 4.2 — detectar vuelta del magic link
+  // Migración desde localStorage si hay perfiles guardados ahí
+  const profiles = await getProfiles();
+
+  renderProfileSelector();
+  // Si solo hay un perfil, entrar directamente
+  const ps = await getProfiles();
+  if (ps.length === 1) {
+    selectProfile(ps[0].id);
+  }
+  // iOS banner (solo si no hay perfil único que auto-selecciona)
+  showIOSBannerIfNeeded();
+})();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('SW registrado:', reg.scope))
+      .catch(err => console.log('SW error:', err));
+  });
+}
+</script>
+</body>
+</html>

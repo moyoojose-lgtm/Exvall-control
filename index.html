@@ -13,9 +13,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="application-name" content="Exvall CM">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.js" integrity="sha384-ysv13JVP3fufiEXfjML9OdCa/rRbMJvUBOWyor82wfuK8INNZAvmbxHgKIHi+oqz" crossorigin="anonymous"></script>
 <style>
   :root {
     --bg: #f5f4f0;
@@ -58,7 +58,8 @@
     --success-bg: #0f2a1a;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.5; min-height: 100vh; }
+  html { overscroll-behavior: none; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.5; min-height: 100vh; overscroll-behavior: none; }
 
   /* ── PROFILE SELECTOR OVERLAY ── */
   #profile-overlay {
@@ -105,7 +106,7 @@
   .modal-title { font-size: 16px; font-weight: 500; margin-bottom: 16px; }
   .modal-field { margin-bottom: 12px; }
   .modal-field label { display: block; font-size: 12px; color: var(--text2); font-weight: 500; margin-bottom: 5px; }
-  .modal-field input { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; }
+  .modal-field input { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 16px; outline: none; }
   .modal-field input:focus { border-color: var(--accent); }
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
   .emoji-picker { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
@@ -121,7 +122,7 @@
   .app-title { font-size: 16px; font-weight: 500; letter-spacing: -0.3px; }
   .header-right { display: flex; align-items: center; gap: 8px; }
   .irpf-pill { display: flex; align-items: center; gap: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px 4px 10px; font-size: 13px; color: var(--text2); }
-  .irpf-pill input { width: 40px; border: none; background: transparent; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); text-align: center; outline: none; }
+  .irpf-pill input { width: 40px; border: none; background: transparent; font-family: 'DM Mono', monospace; font-size: 16px; color: var(--text); text-align: center; outline: none; }
 
   /* Switch de perfil en header */
   .profile-switch-btn {
@@ -152,7 +153,7 @@
   .field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
   .field { display: flex; flex-direction: column; gap: 5px; }
   .field label { font-size: 12px; color: var(--text2); font-weight: 500; }
-  .field input, .field select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text); background: var(--surface); outline: none; transition: border-color 0.15s; }
+  .field input, .field select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 16px; color: var(--text); background: var(--surface); outline: none; transition: border-color 0.15s; }
   .field input:focus, .field select:focus { border-color: var(--accent); }
   .field input:disabled { background: var(--surface2); color: var(--text3); cursor: not-allowed; }
   .field input.highlight { border-color: #e09800; background: var(--warn-bg); }
@@ -204,7 +205,7 @@
   .config-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
   .config-item:last-child { border-bottom: none; }
   .config-item span { flex: 1; }
-  .config-item input[type="number"] { width: 80px; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Mono', monospace; font-size: 13px; }
+  .config-item input[type="number"] { width: 80px; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Mono', monospace; font-size: 16px; }
   .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--surface2); border: 1px solid var(--border); color: var(--text2); }
 
   .hist-entry { font-size: 12px; color: var(--text2); padding: 3px 0; display: flex; gap: 12px; }
@@ -215,7 +216,7 @@
   .form-msg.ok { color: var(--success); }
 
   .add-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-top: 10px; }
-  .add-row input { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 13px; }
+  .add-row input { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 16px; }
 
   /* Notas en entradas */
   .entry-nota { font-size: 11px; color: var(--text3); font-style: italic; display: block; margin-top: 2px; }
@@ -611,6 +612,11 @@
         </label>
       </div>
       <div id="backup-msg" style="font-size:12px;color:var(--text2);margin-top:8px;display:none;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Papelera <span style="font-weight:400;font-size:11px;text-transform:none;">(entradas eliminadas — quedan guardadas como rastro, no se puede editar)</span></div>
+      <div id="papelera-list"></div>
     </div>
 
     <div class="card">
@@ -1418,10 +1424,15 @@ function addEntry() {
 }
 
 function deleteEntry(idx) {
-  showConfirm('Eliminar entrada', '¿Eliminar esta entrada? No se puede deshacer.', 'Eliminar', () => {
-    state.entries[getKey()].splice(idx, 1);
+  showConfirm('Eliminar entrada', '¿Eliminar esta entrada? Se guarda en la papelera de Configuración (no se borra sin dejar rastro).', 'Eliminar', () => {
+    const key = getKey();
+    const [eliminada] = state.entries[key].splice(idx, 1);
+    // Rastro de auditoría: no se borra sin dejar constancia — se guarda una copia
+    // en la papelera con la fecha de eliminación, útil como prueba si hiciera falta.
+    if (!state.papelera) state.papelera = [];
+    state.papelera.push({ ...eliminada, mesKey: key, eliminadoEn: new Date().toISOString() });
     save(); renderEntries(); renderMonths();
-    showToast('Entrada eliminada');
+    showToast('Entrada eliminada (guardada en la papelera)');
   });
 }
 
@@ -1478,7 +1489,12 @@ function renderEntries() {
       lugLabel  = lug ? lug.name : '?';
     }
     const notaHtml = e.nota ? `<span class="entry-nota">📝 ${escHtml(e.nota)}</span>` : '';
-    html += `<tr>
+    // Título con el rastro de auditoría (fecha de creación y nº de ediciones), visible al pasar el ratón / mantener pulsado
+    let rastroTitle = e.createdAt ? `Creado: ${new Date(e.createdAt).toLocaleString('es-ES')}` : '';
+    if (Array.isArray(e.historial) && e.historial.length > 0) {
+      rastroTitle += (rastroTitle ? ' — ' : '') + `Editado ${e.historial.length} ${e.historial.length === 1 ? 'vez' : 'veces'} (última: ${new Date(e.editedAt).toLocaleString('es-ES')})`;
+    }
+    html += `<tr${rastroTitle ? ` title="${escHtml(rastroTitle)}"` : ''}>
       <td class="${sameDia?'td-muted':'td-mono'}">${sameDia ? '↳' : e.dia}</td>
       <td style="font-size:12px;">${escHtml(servLabel)}${notaHtml}</td>
       <td class="td-muted" style="font-size:12px;">${escHtml(lugLabel)}</td>
@@ -1600,6 +1616,19 @@ function renderConfig() {
   document.getElementById('irpf-hist').innerHTML = hist.length === 0
     ? '<span style="font-size:13px;color:var(--text3);">Sin cambios registrados aún.</span>'
     : hist.map(h => `<div class="hist-entry"><span>${h.valor}%</span><span>desde ${h.desde}</span></div>`).join('');
+
+  // Papelera: rastro de auditoría de las entradas eliminadas (no editable, solo consulta)
+  const papelera = (state.papelera || []).slice().reverse();
+  document.getElementById('papelera-list').innerHTML = papelera.length === 0
+    ? '<span style="font-size:13px;color:var(--text3);">Vacía — no se ha eliminado ninguna entrada.</span>'
+    : papelera.slice(0, 50).map(p => {
+        const serv = state.servicios.find(s => s.id === p.servId);
+        const nombreServ = p.especDesc ? p.especDesc : (serv ? serv.name : '—');
+        return `<div class="hist-entry" title="Eliminada el ${new Date(p.eliminadoEn).toLocaleString('es-ES')}">
+          <span>Día ${p.dia} (${p.mesKey}) — ${escHtml(nombreServ)} — ${p.total.toFixed(2).replace('.',',')} €</span>
+          <span style="color:var(--text3);">eliminada ${new Date(p.eliminadoEn).toLocaleDateString('es-ES')}</span>
+        </div>`;
+      }).join('');
 
   document.getElementById('servicios-list').innerHTML = state.servicios.map((s, i) => `
     <div class="config-item">
@@ -2179,6 +2208,15 @@ function saveEditEntry() {
   const total = calcEditTotal();
   const precioCoche = coche === 'si' && lug ? lug.coche : (coche === 'km' ? parseFloat((km * state.extras.km).toFixed(2)) : 0);
 
+  // Rastro de auditoría: antes de sobrescribir, guardamos en el historial
+  // cómo estaba la entrada antes de esta edición (no se pierde el dato anterior).
+  const historialPrevio = Array.isArray(e.historial) ? e.historial : [];
+  const nuevoHistorial = historialPrevio.concat([{
+    fecha: new Date().toISOString(),
+    totalAnterior: e.total,
+    diaAnterior: e.dia
+  }]);
+
   // Actualizar la entrada conservando campos que no se editan (stops, createdAt...)
   entries[_editIdx] = {
     ...e,
@@ -2196,7 +2234,8 @@ function saveEditEntry() {
     precioServ: serv ? (serv.precio > 0 ? serv.precio : manual) : 0,
     precioCoche,
     nota,
-    editedAt: new Date().toISOString()
+    editedAt: new Date().toISOString(),
+    historial: nuevoHistorial
   };
 
   // Reordenar por día
@@ -2481,12 +2520,50 @@ async function detectarSesionMagicLink() {
   showIOSBannerIfNeeded();
 })();
 </script>
+<div id="update-banner" style="display:none;position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 16px;border-radius:999px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,0.25);z-index:999;cursor:pointer;display:flex;align-items:center;gap:8px;" onclick="aplicarActualizacion()">
+  🔄 Hay una versión nueva — pulsa para actualizar
+</div>
 <script>
+let _swNuevoWorker = null;
+
+function aplicarActualizacion() {
+  if (!_swNuevoWorker) { location.reload(); return; }
+  _swNuevoWorker.postMessage('SKIP_WAITING');
+}
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('SW registrado:', reg.scope))
+      .then(reg => {
+        console.log('SW registrado:', reg.scope);
+
+        // Si ya hay un worker esperando (versión nueva detectada antes de esta carga)
+        if (reg.waiting) {
+          _swNuevoWorker = reg.waiting;
+          document.getElementById('update-banner').style.display = 'flex';
+        }
+
+        // Detectar cuándo se instala una versión nueva del Service Worker
+        reg.addEventListener('updatefound', () => {
+          const nuevoWorker = reg.installing;
+          if (!nuevoWorker) return;
+          nuevoWorker.addEventListener('statechange', () => {
+            if (nuevoWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              _swNuevoWorker = nuevoWorker;
+              document.getElementById('update-banner').style.display = 'flex';
+            }
+          });
+        });
+      })
       .catch(err => console.log('SW error:', err));
+
+    // Cuando el nuevo Service Worker toma el control, recargar para usar la versión nueva
+    let _recargando = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (_recargando) return;
+      _recargando = true;
+      location.reload();
+    });
   });
 }
 </script>

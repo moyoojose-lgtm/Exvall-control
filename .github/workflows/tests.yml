@@ -1,0 +1,63 @@
+name: Tests y versión automática
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar tests
+        run: npm test
+
+  version-sw:
+    # Solo en push directo a main (no en pull requests), y solo si los tests han pasado.
+    # Así nunca se marca una versión nueva a partir de un cambio que rompe algo.
+    needs: test
+    if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calcular hash de lo que sirve la app (index.html + manifest.json)
+        id: hash
+        run: |
+          HASH=$(cat index.html manifest.json | sha256sum | cut -c1-10)
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Actualizar CACHE_NAME en sw.js si el contenido ha cambiado
+        run: |
+          sed -i "s/const CACHE_NAME = '.*';/const CACHE_NAME = 'exvall-sary-${{ steps.hash.outputs.hash }}';/" sw.js
+
+      - name: Publicar el nuevo sw.js si cambió (esto es lo que dispara el aviso de "nueva versión" en la app)
+        run: |
+          if git diff --quiet sw.js; then
+            echo "El contenido no ha cambiado desde el último despliegue — no hace falta nueva versión."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add sw.js
+            git commit -m "chore: actualizar versión de caché automáticamente [skip ci]"
+            git push
+          fi

@@ -38,6 +38,7 @@ export const DEFAULT_STATE = () => ({
   entries: {},
   banco:   {},
   nombre:  '',
+  papelera: [], // rastro de auditoría de entradas eliminadas
 });
 
 // ── Cálculo de totales ────────────────────────────────────────────────────────
@@ -177,6 +178,9 @@ export function aplicarBackup(estadoActual, importado) {
     servicios: importado.servicios || estadoActual.servicios,
     lugares:   importado.lugares   || estadoActual.lugares,
     extras:    importado.extras    || estadoActual.extras,
+    // La papelera (rastro de auditoría) también viaja con el backup, para no
+    // perder el historial de entradas eliminadas al restaurar en otro dispositivo.
+    papelera:  importado.papelera  || estadoActual.papelera || [],
   };
 }
 

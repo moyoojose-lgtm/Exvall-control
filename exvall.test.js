@@ -17,7 +17,7 @@ import {
   pdfTxt,
   DEFAULT_STATE,
   MONTHS,
-} from '../logica.js';
+} from './logica.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS de test

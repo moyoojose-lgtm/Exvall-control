@@ -1,5 +1,9 @@
-// Exvall Sary — Service Worker v2
-const CACHE_NAME = 'exvall-sary-v2';
+// Exvall Sary — Service Worker
+// El valor de CACHE_NAME se actualiza SOLO, automáticamente, por GitHub Actions
+// en cada push a main (ver .github/workflows/tests.yml, job "version-sw").
+// No hace falta cambiarlo a mano nunca — si lo editas manualmente aquí, el
+// siguiente push lo volverá a sobrescribir con el hash calculado automáticamente.
+const CACHE_NAME = 'exvall-sary-v3';
 
 // Recursos a cachear para uso offline
 const ASSETS = [
@@ -22,8 +26,20 @@ self.addEventListener('install', event => {
           )
         );
       });
-    }).then(() => self.skipWaiting())
+    })
+    // Nota: ya NO se llama a self.skipWaiting() aquí. El Service Worker nuevo
+    // se queda "esperando" hasta que la persona pulse el aviso de "nueva versión
+    // disponible" en la app (ver index.html / mensaje SKIP_WAITING más abajo).
+    // Así evitamos que la app cambie de versión sin avisar mientras se está usando.
   );
+});
+
+// Permite que la app (index.html) fuerce la activación del SW nuevo
+// cuando la persona pulsa el aviso de "nueva versión disponible".
+self.addEventListener('message', event => {
+  if (event.data === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Activación: limpiar cachés antiguas

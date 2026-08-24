@@ -615,6 +615,12 @@
     </div>
 
     <div class="card">
+      <div class="card-title">Reportar bug o mejora</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">¿Algo no funciona bien o se te ocurre cómo mejorar la app? Cuéntalo aquí — se abre un formulario aparte, se manda solo con tu descripción y unos datos técnicos automáticos (versión, dispositivo, navegador) para ayudar a encontrar el problema.</p>
+      <button class="btn btn-secondary btn-sm" onclick="reportarBugOMejora()">🐞 Reportar bug o mejora</button>
+    </div>
+
+    <div class="card">
       <div class="card-title">Papelera <span style="font-weight:400;font-size:11px;text-transform:none;">(entradas eliminadas — quedan guardadas como rastro, no se puede editar)</span></div>
       <div id="papelera-list"></div>
     </div>
@@ -2565,6 +2571,62 @@ if ('serviceWorker' in navigator) {
       location.reload();
     });
   });
+}
+</script>
+<script>
+// Reportar bug o mejora: abre el formulario externo (Google Forms) con los
+// datos técnicos ya rellenos (versión de la app, dispositivo, navegador),
+// para que la persona solo tenga que elegir el tipo y escribir la descripción.
+// El formulario en sí (preguntas, aviso por email al llegar una respuesta)
+// se gestiona fuera de la app, en Google Forms.
+const REPORTE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScMxcrjuBnvAW2eBObFMJl3khlN7FGYtQsIWH10MPPQ9q2Wkg/viewform';
+const REPORTE_ENTRY_VERSION    = 'entry.704675883';
+const REPORTE_ENTRY_DISPOSITIVO = 'entry.1758836931';
+const REPORTE_ENTRY_NAVEGADOR   = 'entry.210269158';
+
+async function getVersionAppActual() {
+  try {
+    if (!('caches' in window)) return 'desconocida';
+    const keys = await caches.keys();
+    const swCache = keys.find(k => k.startsWith('exvall-sary-'));
+    return swCache || 'desconocida';
+  } catch (e) {
+    return 'desconocida';
+  }
+}
+
+function getDispositivoActual() {
+  const ua = navigator.userAgent || '';
+  if (/iPhone/.test(ua)) return 'iPhone';
+  if (/iPad/.test(ua)) return 'iPad';
+  if (/Android/.test(ua)) return 'Android';
+  if (/Macintosh/.test(ua)) return 'Mac (ordenador)';
+  if (/Windows/.test(ua)) return 'Windows (ordenador)';
+  return 'Otro / desconocido';
+}
+
+function getNavegadorActual() {
+  const ua = navigator.userAgent || '';
+  if (/CriOS/.test(ua)) return 'Chrome (iOS)';
+  if (/FxiOS/.test(ua)) return 'Firefox (iOS)';
+  if (/EdgiOS|Edg\//.test(ua)) return 'Edge';
+  if (/OPR\//.test(ua)) return 'Opera';
+  if (/Firefox/.test(ua)) return 'Firefox';
+  if (/Chrome/.test(ua)) return 'Chrome';
+  if (/Safari/.test(ua)) return 'Safari';
+  return 'Otro / desconocido';
+}
+
+async function reportarBugOMejora() {
+  const version = await getVersionAppActual();
+  const dispositivo = getDispositivoActual();
+  const navegador = getNavegadorActual();
+  const url = new URL(REPORTE_FORM_URL);
+  url.searchParams.set('usp', 'pp_url');
+  url.searchParams.set(REPORTE_ENTRY_VERSION, version);
+  url.searchParams.set(REPORTE_ENTRY_DISPOSITIVO, dispositivo);
+  url.searchParams.set(REPORTE_ENTRY_NAVEGADOR, navegador);
+  window.open(url.toString(), '_blank');
 }
 </script>
 </body>

@@ -17,6 +17,10 @@ import {
   pdfTxt,
   DEFAULT_STATE,
   MONTHS,
+  migrarHorasServicios,
+  horasEntry,
+  calcHorasMes,
+  JORNADA_ANUAL_CONVENIO,
 } from './logica.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -439,6 +443,96 @@ describe('buildResumenAnual', () => {
     const resumen = buildResumenAnual(state, 2025);
     expect(resumen[0].mes).toBe('Enero');
     expect(resumen[11].mes).toBe('Diciembre');
+  });
+
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HORAS TRABAJADAS (24/08/2026)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('migrarHorasServicios', () => {
+
+  it('Añade las horas por defecto a servicios sin ese campo', () => {
+    const servicios = [
+      { id: 'boda', name: 'Boda', precio: 80 },
+      { id: 'servicio3h', name: 'Servicio 3H', precio: 45 },
+      { id: 'otro-cualquiera', name: 'Otro', precio: 20 },
+    ];
+    migrarHorasServicios(servicios);
+    expect(servicios[0].horas).toBe(5);
+    expect(servicios[1].horas).toBe(3);
+    expect(servicios[2].horas).toBe(4); // sin default conocido → 4 por defecto
+  });
+
+  it('No sobrescribe las horas si ya existen', () => {
+    const servicios = [{ id: 'boda', name: 'Boda', precio: 80, horas: 6 }];
+    migrarHorasServicios(servicios);
+    expect(servicios[0].horas).toBe(6);
+  });
+
+  it('DEFAULT_STATE ya trae las horas por defecto correctas', () => {
+    const state = DEFAULT_STATE();
+    const boda = state.servicios.find(s => s.id === 'boda');
+    const s3h  = state.servicios.find(s => s.id === 'servicio3h');
+    const resto = state.servicios.find(s => s.id === 'comidas');
+    expect(boda.horas).toBe(5);
+    expect(s3h.horas).toBe(3);
+    expect(resto.horas).toBe(4);
+  });
+
+});
+
+describe('horasEntry', () => {
+
+  it('Entrada normal usa horasServ congelado si existe', () => {
+    const state = mkState();
+    const e = { servId: 'boda', horasServ: 5, hext: 0, hnoc: 0 };
+    expect(horasEntry(e, state)).toBe(5);
+  });
+
+  it('Suma horas extra y nocturnas al horasServ congelado', () => {
+    const state = mkState();
+    const e = { servId: 'servicio3h', horasServ: 3, hext: 2, hnoc: 1 };
+    expect(horasEntry(e, state)).toBe(6);
+  });
+
+  it('Entrada antigua sin horasServ calcula a partir del servicio actual', () => {
+    const state = mkState();
+    const e = { servId: 'boda', hext: 0, hnoc: 0 }; // sin horasServ
+    expect(horasEntry(e, state)).toBe(5);
+  });
+
+  it('Entrada de ruta (stops) suma las horas de cada parada', () => {
+    const state = mkState();
+    const e = {
+      stops: [{ servId: 'boda' }, { servId: 'servicio3h' }],
+      hext: 0, hnoc: 0,
+    };
+    expect(horasEntry(e, state)).toBe(8); // 5 + 3
+  });
+
+});
+
+describe('calcHorasMes', () => {
+
+  it('Sin entradas → 0 horas y 0% de jornada', () => {
+    const state = mkState();
+    const { horas, pctJornada } = calcHorasMes([], state);
+    expect(horas).toBe(0);
+    expect(pctJornada).toBe(0);
+  });
+
+  it('Calcula horas totales y % de jornada del convenio correctamente', () => {
+    const state = mkState();
+    const entries = [
+      { servId: 'boda', horasServ: 5, hext: 0, hnoc: 0 },
+      { servId: 'servicio3h', horasServ: 3, hext: 2, hnoc: 0 },
+    ];
+    const { horas, pctJornada } = calcHorasMes(entries, state);
+    expect(horas).toBe(10); // 5 + 3 + 2
+    const jornadaMensual = JORNADA_ANUAL_CONVENIO / 12;
+    expect(pctJornada).toBe(parseFloat((10 / jornadaMensual * 100).toFixed(2)));
   });
 
 });

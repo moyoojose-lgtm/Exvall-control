@@ -584,6 +584,7 @@
   <div id="sec-resumen" class="section">
     <div class="metrics" id="resumen-metrics"></div>
     <div class="card" id="resumen-table"></div>
+    <div class="card" id="resumen-horas-tipo" style="margin-top:16px;"></div>
   </div>
 
   <!-- CONFIGURACIÓN -->
@@ -631,11 +632,12 @@
     </div>
 
     <div class="card">
-      <div class="card-title">Servicios <span style="font-weight:400;font-size:11px;text-transform:none;">(el precio se congela en cada entrada al registrar)</span></div>
+      <div class="card-title">Servicios <span style="font-weight:400;font-size:11px;text-transform:none;">(el precio y las horas se congelan en cada entrada al registrar)</span></div>
       <div id="servicios-list"></div>
       <div class="add-row">
         <input type="text" id="new-serv-name" placeholder="Nombre servicio" style="width:150px;">
         <input type="number" id="new-serv-precio" placeholder="€" style="width:80px;">
+        <input type="number" id="new-serv-horas" placeholder="Horas" step="0.5" style="width:70px;">
         <button class="btn btn-primary btn-sm" onclick="addServicio()">Añadir</button>
       </div>
     </div>
@@ -716,11 +718,11 @@ const DEFAULT_STATE = () => ({
   irpfHist: [],
   currentMonth: new Date().getMonth(),
   servicios: [
-    {id:'boda',name:'Boda',precio:80},
-    {id:'comidas',name:'Comidas',precio:65},
-    {id:'cenas',name:'Cenas',precio:65},
-    {id:'servicio3h',name:'Servicio 3H',precio:45},
-    {id:'especial',name:'Especial',precio:0}
+    {id:'boda',name:'Boda',precio:80,horas:5},
+    {id:'comidas',name:'Comidas',precio:65,horas:4},
+    {id:'cenas',name:'Cenas',precio:65,horas:4},
+    {id:'servicio3h',name:'Servicio 3H',precio:45,horas:3},
+    {id:'especial',name:'Especial',precio:0,horas:4}
   ],
   lugares: [
     {id:'arzuaga',name:'Arzuaga',coche:18},
@@ -740,6 +742,22 @@ const DEFAULT_STATE = () => ({
 });
 
 let state = DEFAULT_STATE();
+
+// Jornada completa de referencia del Convenio de Hostelería y Alojamientos
+// Turísticos de Valladolid (Art. 4): 1.782 horas/año a jornada completa.
+// Se usa solo para calcular el % de jornada que representan tus horas
+// registradas, como referencia para comparar tú mismo con el % de tu
+// contrato (CTP) que figura en el Informe de Vida Laboral.
+const JORNADA_ANUAL_CONVENIO = 1782;
+
+// Migración: añade "horas" a servicios guardados antes de esta mejora
+// (24/08/2026), para que el cálculo de horas no falle con perfiles antiguos.
+function migrarHorasServicios() {
+  const HORAS_POR_DEFECTO = {boda:5, comidas:4, cenas:4, servicio3h:3, especial:4};
+  (state.servicios || []).forEach(s => {
+    if (s.horas == null) s.horas = HORAS_POR_DEFECTO[s.id] != null ? HORAS_POR_DEFECTO[s.id] : 4;
+  });
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // INDEXEDDB — capa de persistencia (reemplaza localStorage para datos de perfil)
@@ -837,6 +855,7 @@ async function loadProfile(id) {
     state = data ? { ...DEFAULT_STATE(), ...data } : DEFAULT_STATE();
   } catch(e) { state = DEFAULT_STATE(); }
   state.currentMonth = new Date().getMonth();
+  migrarHorasServicios();
 }
 
 async function saveProfile() {
@@ -1127,6 +1146,37 @@ function selectMonth(i) { state.currentMonth = i; renderMonths(); renderEntries(
 function getKey() { return `${currentYear}-${state.currentMonth}`; }
 function getEntries() { return state.entries[getKey()] || []; }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// HORAS — cálculo de horas trabajadas (servicio + extra + nocturnas) y % de
+// jornada, para comparar tú mismo contra el % de tu contrato (CTP) de la
+// Vida Laboral. Ver Convenio de Hostelería de Valladolid, Art. 4, 12 y 13.
+// ══════════════════════════════════════════════════════════════════════════════
+function horasEntry(e) {
+  // Entradas antiguas (antes de esta mejora) no tienen horasServ guardado:
+  // se calcula al vuelo con la configuración actual de servicios como mejor
+  // aproximación posible.
+  let horasServ = e.horasServ;
+  if (horasServ == null) {
+    if (e.stops && e.stops.length > 0) {
+      horasServ = e.stops.reduce((s, st) => {
+        const sv = state.servicios.find(x => x.id === st.servId);
+        return s + (sv ? (sv.horas != null ? sv.horas : 4) : 0);
+      }, 0);
+    } else {
+      const sv = state.servicios.find(x => x.id === e.servId);
+      horasServ = sv ? (sv.horas != null ? sv.horas : 4) : 0;
+    }
+  }
+  return horasServ + (e.hext || 0) + (e.hnoc || 0);
+}
+
+function calcHorasMes(entries) {
+  const horas = entries.reduce((s, e) => s + horasEntry(e), 0);
+  const jornadaMensual = JORNADA_ANUAL_CONVENIO / 12;
+  const pctJornada = jornadaMensual > 0 ? (horas / jornadaMensual * 100) : 0;
+  return { horas, pctJornada };
+}
+
 function onDiaChange() {
   const dia = parseInt(document.getElementById('f-dia').value);
   renderDayPanel(dia);
@@ -1403,6 +1453,18 @@ function addEntry() {
   const total = calcTotal();
   const precioServ  = serv ? (serv.precio > 0 ? serv.precio : manual) : 0;
   const precioCoche = coche === 'si' && lug ? lug.coche : (coche === 'km' ? parseFloat((km * state.extras.km).toFixed(2)) : 0);
+  // Horas del/de los servicio/s de esta entrada, congeladas al registrar
+  // (igual que el precio de coche) para que un cambio posterior en la
+  // configuración de horas por servicio no altere entradas ya guardadas.
+  let horasServ = 0;
+  if (coche === 'km') {
+    routeStops.forEach(s => {
+      const sv = state.servicios.find(x => x.id === s.servId);
+      if (sv) horasServ += (sv.horas != null ? sv.horas : 4);
+    });
+  } else {
+    horasServ = serv ? (serv.horas != null ? serv.horas : 4) : 0;
+  }
 
   const key = getKey();
   if (!state.entries[key]) state.entries[key] = [];
@@ -1410,7 +1472,7 @@ function addEntry() {
     dia, servId: coche==='km'?null:servId, lugId: coche==='km'?null:lugId,
     coche, hext, hnoc, manual, especDesc, km, total,
     irpf: state.irpf,
-    precioServ, precioCoche,
+    precioServ, precioCoche, horasServ,
     stops: coche==='km' ? [...routeStops] : [],
     nota: nota || '',
     createdAt: new Date().toISOString()
@@ -1454,6 +1516,12 @@ function renderEntries() {
   // Barra de progreso hacia objetivo (si hay datos)
   const maxPosible = 12 * Math.max(...entries.map(e => e.total), 1);
 
+  // Horas trabajadas y desglose dinero servicio / coche-gasolina (24/08/2026)
+  const { horas: horasMes, pctJornada } = calcHorasMes(entries);
+  const dineroCoche = entries.reduce((s, e) => s + (e.precioCoche || 0), 0);
+  const dineroServicio = totalMes - dineroCoche;
+  const numServicios = entries.reduce((s, e) => s + (e.stops && e.stops.length > 0 ? e.stops.length : 1), 0);
+
   let html = `<div class="entries-header">
     <span style="font-size:13px;color:var(--text2);">${entries.length} entrada${entries.length>1?'s':''} — ${MONTHS[state.currentMonth]} ${currentYear}</span>
     <div style="display:flex;gap:6px;align-items:center;">
@@ -1461,6 +1529,22 @@ function renderEntries() {
       <span style="font-size:11px;color:var(--text3);">neto ${totalNeto.toFixed(2).replace('.',',')} €</span>
       <button class="btn btn-secondary btn-sm" onclick="exportMesExcel()" title="Exportar mes a Excel">XLS</button>
       <button class="btn btn-secondary btn-sm" onclick="exportMesPDF()" title="Exportar mes a PDF">PDF</button>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:12px;">
+    <div class="card-title">Horas trabajadas este mes</div>
+    <div style="display:flex;flex-wrap:wrap;gap:18px;font-size:13px;">
+      <div><span style="color:var(--text3);">Horas totales:</span> <strong>${horasMes.toFixed(1).replace('.',',')} h</strong></div>
+      <div><span style="color:var(--text3);">% de jornada completa (convenio, ${JORNADA_ANUAL_CONVENIO}h/año):</span> <strong>${pctJornada.toFixed(1).replace('.',',')} %</strong></div>
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin-top:6px;margin-bottom:0;">Compáralo tú mismo con el % de jornada (CTP) de tu contrato que figura en el Informe de Vida Laboral de la Seguridad Social.</p>
+  </div>
+  <div class="card" style="margin-bottom:12px;">
+    <div class="card-title">Dinero de este mes — desglosado</div>
+    <div style="display:flex;flex-wrap:wrap;gap:18px;font-size:13px;">
+      <div><span style="color:var(--text3);">Servicios:</span> <strong>${dineroServicio.toFixed(2).replace('.',',')} €</strong></div>
+      <div><span style="color:var(--text3);">Coche / gasolina:</span> <strong>${dineroCoche.toFixed(2).replace('.',',')} €</strong></div>
+      <div><span style="color:var(--text3);">Número de servicios:</span> <strong>${numServicios}</strong></div>
     </div>
   </div>
   <div class="card" style="padding:0;overflow:hidden;">
@@ -1606,6 +1690,79 @@ function renderResumen() {
         <td class="td-mono" style="text-align:right;color:var(--success);font-weight:500;">${(totalAnual-retTotal).toFixed(2).replace('.',',')} €</td>
       </tr></tfoot>
     </table></div>`;
+
+  renderHistoricoHorasTipo();
+}
+
+// Histórico de horas por tipo de servicio, a lo largo de todo el año
+// seleccionado — para ver de un vistazo qué tipo de evento compensa peor en
+// horas extra/nocturnas frente a lo que paga, útil como argumento si se
+// negocia el precio con la empresa.
+function renderHistoricoHorasTipo() {
+  const cont = document.getElementById('resumen-horas-tipo');
+  if (!cont) return;
+
+  // Acumular por servicio: nº de veces, horas totales, dinero total
+  const acumulado = {}; // servId -> {nombre, veces, horas, dinero}
+  MONTHS.forEach((m, i) => {
+    const key = `${currentYear}-${i}`;
+    const entries = state.entries[key] || [];
+    entries.forEach(e => {
+      if (e.stops && e.stops.length > 0) {
+        // Rutas con varias paradas: cada parada cuenta como un servicio propio
+        e.stops.forEach(st => {
+          const sv = state.servicios.find(x => x.id === st.servId);
+          const id = st.servId || '—';
+          const nombre = sv ? sv.name : '?';
+          const horas = sv ? (sv.horas != null ? sv.horas : 4) : 0;
+          const precio = sv ? (sv.precio > 0 ? sv.precio : (st.especPrecio || 0)) : 0;
+          if (!acumulado[id]) acumulado[id] = { nombre, veces: 0, horas: 0, dinero: 0 };
+          acumulado[id].veces += 1;
+          acumulado[id].horas += horas;
+          acumulado[id].dinero += precio;
+        });
+      } else {
+        const sv = state.servicios.find(x => x.id === e.servId);
+        const id = e.servId || '—';
+        const nombre = sv ? sv.name : (e.especDesc || '?');
+        if (!acumulado[id]) acumulado[id] = { nombre, veces: 0, horas: 0, dinero: 0 };
+        acumulado[id].veces += 1;
+        acumulado[id].horas += horasEntry(e);
+        acumulado[id].dinero += e.total;
+      }
+    });
+  });
+
+  const filas = Object.values(acumulado).sort((a, b) => b.horas - a.horas);
+  if (filas.length === 0) {
+    cont.innerHTML = `<div class="card-title">Histórico de horas por tipo de servicio (${currentYear})</div>
+      <p style="font-size:13px;color:var(--text3);">Sin entradas todavía en ${currentYear}.</p>`;
+    return;
+  }
+
+  const rowsHtml = filas.map(f => {
+    const euroHora = f.horas > 0 ? (f.dinero / f.horas) : 0;
+    return `<tr>
+      <td style="font-size:12px;">${escHtml(f.nombre)}</td>
+      <td class="td-mono" style="text-align:right;">${f.veces}</td>
+      <td class="td-mono" style="text-align:right;">${f.horas.toFixed(1).replace('.',',')} h</td>
+      <td class="td-mono" style="text-align:right;">${f.dinero.toFixed(2).replace('.',',')} €</td>
+      <td class="td-mono" style="text-align:right;color:var(--text2);">${euroHora.toFixed(2).replace('.',',')} €/h</td>
+    </tr>`;
+  }).join('');
+
+  cont.innerHTML = `<div class="card-title">Histórico de horas por tipo de servicio (${currentYear})</div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:10px;">Incluye horas del servicio + horas extra + horas nocturnas de cada entrada. El €/hora es orientativo (dinero total del tipo ÷ horas totales del tipo).</p>
+    <div style="overflow-x:auto;"><table>
+      <thead><tr>
+        <th>Tipo de servicio</th>
+        <th style="text-align:right;">Veces</th>
+        <th style="text-align:right;">Horas</th>
+        <th style="text-align:right;">Dinero</th>
+        <th style="text-align:right;">€/hora</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table></div>`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1641,6 +1798,7 @@ function renderConfig() {
       <span>${escHtml(s.name)}</span>
       <span class="tag">${s.precio > 0 ? s.precio + ' €' : 'precio libre'}</span>
       <input type="number" value="${s.precio}" min="0" step="1" onchange="updateServPrecio(${i},this.value)" title="Cambiar precio">
+      <input type="number" value="${s.horas != null ? s.horas : 4}" min="0" step="0.5" style="width:56px;" onchange="updateServHoras(${i},this.value)" title="Horas que representa este servicio">
       ${i >= 5 ? `<button class="del-circle" onclick="delServicio(${i})">×</button>` : '<span style="width:22px;"></span>'}
     </div>`).join('');
 
@@ -1656,16 +1814,20 @@ function renderConfig() {
 }
 
 function updateServPrecio(i, v) { state.servicios[i].precio = parseFloat(v) || 0; save(); renderConfig(); populateDropdowns(); }
+function updateServHoras(i, v)  { state.servicios[i].horas  = parseFloat(v) || 0; save(); renderConfig(); populateDropdowns(); }
 function updateLugCoche(i, v)   { state.lugares[i].coche   = parseFloat(v) || 0; save(); renderConfig(); populateDropdowns(); }
 
 function addServicio() {
   const name   = document.getElementById('new-serv-name').value.trim();
   const precio = parseFloat(document.getElementById('new-serv-precio').value) || 0;
+  const horasEl = document.getElementById('new-serv-horas');
+  const horas  = horasEl ? (parseFloat(horasEl.value) || 4) : 4;
   if (!name) return;
-  state.servicios.push({id: crypto.randomUUID(), name, precio});
+  state.servicios.push({id: crypto.randomUUID(), name, precio, horas});
   save(); renderConfig(); populateDropdowns();
   document.getElementById('new-serv-name').value = '';
   document.getElementById('new-serv-precio').value = '';
+  if (horasEl) horasEl.value = '';
   showToast('Servicio añadido', 'ok');
 }
 
@@ -1838,6 +2000,7 @@ function importBackup(event) {
       if (imported.servicios) state.servicios = imported.servicios;
       if (imported.lugares)   state.lugares   = imported.lugares;
       if (imported.extras)    state.extras    = imported.extras;
+      migrarHorasServicios();
       save();
       renderMonths(); renderEntries(); populateDropdowns();
       document.getElementById('irpf-input').value = state.irpf;
@@ -2239,6 +2402,7 @@ function saveEditEntry() {
     irpf: state.irpf,
     precioServ: serv ? (serv.precio > 0 ? serv.precio : manual) : 0,
     precioCoche,
+    horasServ: serv ? (serv.horas != null ? serv.horas : 4) : 0,
     nota,
     editedAt: new Date().toISOString(),
     historial: nuevoHistorial
@@ -2465,6 +2629,7 @@ async function nubeRestaurar() {
         if (importado.lugares)   state.lugares   = importado.lugares;
         if (importado.extras)    state.extras    = importado.extras;
         if (importado.objetivo !== undefined) state.objetivo = importado.objetivo;
+        migrarHorasServicios();
         await saveProfile();
         renderMonths(); renderEntries(); populateDropdowns();
         document.getElementById('irpf-input').value = state.irpf;

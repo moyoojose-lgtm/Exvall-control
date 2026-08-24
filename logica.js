@@ -18,11 +18,11 @@ export const DEFAULT_STATE = () => ({
   irpfHist: [],
   currentMonth: new Date().getMonth(),
   servicios: [
-    {id:'boda',      name:'Boda',          precio:80},
-    {id:'comidas',   name:'Comidas',        precio:65},
-    {id:'cenas',     name:'Cenas',          precio:65},
-    {id:'servicio3h',name:'Servicio 3H',    precio:45},
-    {id:'especial',  name:'Especial',       precio:0 },
+    {id:'boda',      name:'Boda',          precio:80, horas:5},
+    {id:'comidas',   name:'Comidas',        precio:65, horas:4},
+    {id:'cenas',     name:'Cenas',          precio:65, horas:4},
+    {id:'servicio3h',name:'Servicio 3H',    precio:45, horas:3},
+    {id:'especial',  name:'Especial',       precio:0,  horas:4},
   ],
   lugares: [
     {id:'arzuaga',      name:'Arzuaga',          coche:18},
@@ -168,6 +168,8 @@ export function validarBackup(data) {
  * @returns {object} nuevo estado
  */
 export function aplicarBackup(estadoActual, importado) {
+  const servicios = importado.servicios || estadoActual.servicios;
+  migrarHorasServicios(servicios);
   return {
     ...estadoActual,
     entries:   importado.entries   || {},
@@ -175,7 +177,7 @@ export function aplicarBackup(estadoActual, importado) {
     irpf:      importado.irpf      ?? estadoActual.irpf,
     irpfHist:  importado.irpfHist  || estadoActual.irpfHist,
     nombre:    importado.nombre    || estadoActual.nombre,
-    servicios: importado.servicios || estadoActual.servicios,
+    servicios,
     lugares:   importado.lugares   || estadoActual.lugares,
     extras:    importado.extras    || estadoActual.extras,
     // La papelera (rastro de auditoría) también viaja con el backup, para no
@@ -221,6 +223,69 @@ export function buildResumenAnual(state, year) {
       neto,
     };
   });
+}
+
+// ── Horas trabajadas (24/08/2026) ─────────────────────────────────────────────
+
+/**
+ * Jornada completa de referencia del Convenio de Hostelería y Alojamientos
+ * Turísticos de Valladolid (Art. 4): 1.782 horas/año a jornada completa.
+ */
+export const JORNADA_ANUAL_CONVENIO = 1782;
+
+const HORAS_POR_DEFECTO_SERVICIO = { boda: 5, comidas: 4, cenas: 4, servicio3h: 3, especial: 4 };
+
+/**
+ * Añade el campo "horas" a los servicios de un estado que no lo tuvieran
+ * (perfiles guardados antes de esta mejora), para que el resto de funciones
+ * no fallen con datos antiguos. Muta y devuelve el mismo array.
+ * @param {Array} servicios
+ * @returns {Array}
+ */
+export function migrarHorasServicios(servicios) {
+  (servicios || []).forEach(s => {
+    if (s.horas == null) {
+      s.horas = HORAS_POR_DEFECTO_SERVICIO[s.id] != null ? HORAS_POR_DEFECTO_SERVICIO[s.id] : 4;
+    }
+  });
+  return servicios;
+}
+
+/**
+ * Horas totales que representa una entrada: horas del servicio (o de las
+ * paradas de una ruta) + horas extra + horas nocturnas.
+ * @param {object} e     - entrada (con servId u opcionalmente stops)
+ * @param {object} state - estado del perfil (para resolver los servicios)
+ * @returns {number}
+ */
+export function horasEntry(e, state) {
+  let horasServ = e.horasServ;
+  if (horasServ == null) {
+    if (e.stops && e.stops.length > 0) {
+      horasServ = e.stops.reduce((s, st) => {
+        const sv = state.servicios.find(x => x.id === st.servId);
+        return s + (sv ? (sv.horas != null ? sv.horas : 4) : 0);
+      }, 0);
+    } else {
+      const sv = state.servicios.find(x => x.id === e.servId);
+      horasServ = sv ? (sv.horas != null ? sv.horas : 4) : 0;
+    }
+  }
+  return horasServ + (e.hext || 0) + (e.hnoc || 0);
+}
+
+/**
+ * Horas trabajadas y % de jornada completa (según el convenio) para un
+ * conjunto de entradas de un mes.
+ * @param {Array}  entries
+ * @param {object} state
+ * @returns {{ horas: number, pctJornada: number }}
+ */
+export function calcHorasMes(entries, state) {
+  const horas = (entries || []).reduce((s, e) => s + horasEntry(e, state), 0);
+  const jornadaMensual = JORNADA_ANUAL_CONVENIO / 12;
+  const pctJornada = jornadaMensual > 0 ? parseFloat((horas / jornadaMensual * 100).toFixed(2)) : 0;
+  return { horas: parseFloat(horas.toFixed(2)), pctJornada };
 }
 
 // ── Normalización para PDF ────────────────────────────────────────────────────

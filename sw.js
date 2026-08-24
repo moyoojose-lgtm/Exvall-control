@@ -42,6 +42,33 @@ self.addEventListener('message', event => {
   }
 });
 
+// Aviso push (recordatorio lunes/jueves de anotar el finde).
+self.addEventListener('push', event => {
+  let data = { title: 'Exvall Sary', body: 'Tienes un aviso nuevo.' };
+  try {
+    if (event.data) data = event.data.json();
+  } catch (e) {}
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Exvall Sary', {
+      body: data.body || '',
+      icon: './icon-192.png',
+      badge: './icon-192.png',
+    })
+  );
+});
+
+// Al pulsar la notificación, abre la app (o la enfoca si ya está abierta).
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientsArr => {
+      const existente = clientsArr.find(c => c.url.includes(self.registration.scope));
+      if (existente) return existente.focus();
+      return self.clients.openWindow('./');
+    })
+  );
+});
+
 // Activación: limpiar cachés antiguas
 self.addEventListener('activate', event => {
   event.waitUntil(

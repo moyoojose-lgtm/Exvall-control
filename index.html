@@ -115,7 +115,7 @@
 
   /* ── CONFIRM MODAL ── */
   #confirm-modal { display: none; }
-  #confirm-modal .modal-body { font-size: 14px; color: var(--text2); margin-bottom: 16px; }
+  #confirm-modal .modal-body { font-size: 14px; color: var(--text2); margin-bottom: 16px; white-space: pre-line; }
 
   /* 3.1 — Safe area para iPhone con notch / isla dinámica */
   .app-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; padding-top: env(safe-area-inset-top); padding-left: calc(20px + env(safe-area-inset-left)); padding-right: calc(20px + env(safe-area-inset-right)); display: flex; align-items: center; justify-content: space-between; min-height: 56px; height: calc(56px + env(safe-area-inset-top)); position: sticky; top: 0; z-index: 100; }
@@ -256,6 +256,16 @@
   }
   .dark-mode-btn:hover { border-color: var(--accent); background: var(--accent-bg); }
 
+  /* Iconos de ayuda puntual "❓" (25/08/2026) */
+  .help-icon {
+    width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border2);
+    background: var(--surface2); color: var(--text2); cursor: pointer; font-size: 10px;
+    display: inline-flex; align-items: center; justify-content: center; padding: 0;
+    flex-shrink: 0; line-height: 1;
+  }
+  .help-icon:hover { border-color: var(--accent); background: var(--accent-bg); }
+  label .help-icon { margin-left: 4px; vertical-align: middle; }
+
   /* iOS install banner */
   #ios-install-banner {
     display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 8000;
@@ -352,6 +362,28 @@
   </div>
 </div>
 
+<!-- ── INFO MODAL (ayuda puntual "❓") ── -->
+<div class="modal-overlay" id="info-modal" style="display:none;">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-title" id="info-title"></div>
+    <div class="modal-body" id="info-body" style="white-space:pre-line;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary btn-sm" onclick="closeInfo()">Entendido</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── AYUDA MODAL (mini-manual dentro de la app) ── -->
+<div class="modal-overlay" id="ayuda-modal" style="display:none;">
+  <div class="modal" style="max-width:520px;max-height:85vh;overflow-y:auto;">
+    <div class="modal-title">❓ Ayuda</div>
+    <div id="ayuda-body" style="font-size:13px;color:var(--text2);line-height:1.5;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary btn-sm" onclick="closeAyuda()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── EDIT ENTRY MODAL ── -->
 <div class="modal-overlay" id="edit-modal" style="display:none;">
   <div class="modal" style="max-width:400px;max-height:90vh;overflow-y:auto;">
@@ -371,6 +403,10 @@
     <div class="modal-field" id="edit-especial-precio-wrap" style="display:none;">
       <label>Precio (Especial €)</label>
       <input type="number" id="edit-manual" min="0" placeholder="0">
+    </div>
+    <div class="modal-field" id="edit-especial-horas-wrap" style="display:none;">
+      <label>Horas (Especial)</label>
+      <input type="number" id="edit-especial-horas" min="0" step="0.5" placeholder="0 h">
     </div>
     <div class="modal-field">
       <label>Lugar</label>
@@ -445,9 +481,11 @@
   <div class="header-right">
     <span id="offline-badge" title="Sin conexión — el cálculo de rutas no está disponible">⚡ Sin conexión</span>
     <span id="saved-indicator" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;opacity:0.5;transition:opacity 0.4s;white-space:nowrap;"></span>
+    <button class="dark-mode-btn" id="ayuda-btn" onclick="showAyuda()" title="Ayuda">❓</button>
     <button class="dark-mode-btn" id="dark-mode-btn" onclick="toggleDarkMode()" title="Modo oscuro">🌙</button>
     <div class="irpf-pill">
       <span>IRPF</span>
+      <button type="button" class="help-icon" onclick="showInfo('IRPF', 'El % de IRPF es la retención que se descuenta de lo que facturas — así ves de un vistazo cuánto es el bruto (lo que cobras) y cuánto el neto (lo que realmente te queda después de Hacienda). Puedes cambiarlo aquí arriba en cualquier momento; el historial de cambios queda guardado (ver Configuración → Historial de IRPF) para que las entradas antiguas conserven el % que tenían cuando se registraron.')" title="Ayuda con IRPF">❓</button>
       <input type="number" id="irpf-input" min="0" max="50" step="1" value="8" oninput="onIrpfChange()">
       <span>%</span>
     </div>
@@ -492,7 +530,7 @@
           <select id="f-lugar" onchange="onLugarChange()"><option value="">— Selecciona —</option></select>
         </div>
         <div class="field">
-          <label>Coche</label>
+          <label>Coche <button type="button" class="help-icon" onclick="showInfo('Coche por km (ruta)', 'Elige \'por km\' cuando un mismo trayecto en coche incluye más de un servicio — por ejemplo, una Boda en un sitio y una Comida en otro el mismo día, con el mismo coche. Se registra como UNA ruta con varias paradas (una por cada servicio), en vez de como entradas sueltas. La app reparte las horas de cada parada por separado, pero el gasto de coche/gasolina se cuenta una sola vez para toda la ruta.')" title="Ayuda con coche por km">❓</button></label>
           <select id="f-coche" onchange="onCocheChange()">
             <option value="no">No</option>
             <option value="si">Sí — precio fijo</option>
@@ -516,6 +554,10 @@
         <div class="field" id="f-especial-precio-wrap" style="display:none;">
           <label>Precio (Especial)</label>
           <input type="number" id="f-manual" min="0" placeholder="0 €" oninput="calcTotal()">
+        </div>
+        <div class="field" id="f-especial-horas-wrap" style="display:none;">
+          <label>Horas (Especial) <button type="button" class="help-icon" onclick="showInfo('Horas (Especial)', 'Como el precio, las horas de un servicio \'Especial\' se introducen a mano en cada entrada — no usan un valor fijo de Configuración. Se \'congelan\' en la entrada al guardarla, así que un cambio posterior no las altera.')" title="Ayuda con horas de Especial">❓</button></label>
+          <input type="number" id="f-especial-horas" min="0" step="0.5" placeholder="0 h">
         </div>
         <div class="field">
           <label>Nota (opcional)</label>
@@ -545,7 +587,7 @@
               </div>
             </div>
             <div id="stop-especial-wrap" style="display:none;margin-bottom:8px;">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
                 <div class="field">
                   <label>Descripción Especial</label>
                   <input type="text" id="stop-especial-desc" placeholder="Bautizo, Cumpleaños...">
@@ -553,6 +595,10 @@
                 <div class="field">
                   <label>Precio Especial (€)</label>
                   <input type="number" id="stop-especial-precio" min="0" placeholder="0" oninput="calcTotal()">
+                </div>
+                <div class="field">
+                  <label>Horas Especial</label>
+                  <input type="number" id="stop-especial-horas" min="0" step="0.5" placeholder="0 h">
                 </div>
               </div>
             </div>
@@ -583,6 +629,7 @@
   <!-- RESUMEN -->
   <div id="sec-resumen" class="section">
     <div class="metrics" id="resumen-metrics"></div>
+    <div class="card" id="grafico-ingresos-wrap" style="margin-bottom:16px;"></div>
     <div class="card" id="resumen-table"></div>
     <div class="card" id="resumen-horas-tipo" style="margin-top:16px;"></div>
   </div>
@@ -683,6 +730,8 @@
           </div>
           <button class="btn btn-secondary btn-sm" onclick="nubeLogout()">Cerrar sesión</button>
         </div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:10px;">🔄 La copia se sube y se baja sola, unos segundos después de registrar algo. Los botones de abajo son solo para forzarlo a mano si hace falta.</p>
+        <div id="nube-auto-estado" style="font-size:12px;margin-bottom:10px;color:var(--text2);"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="nubeSubir()">⬆ Subir backup</button>
           <button class="btn btn-secondary" style="flex:1;justify-content:center;" onclick="nubeRestaurar()">⬇ Restaurar</button>
@@ -738,7 +787,9 @@ const DEFAULT_STATE = () => ({
   objetivo: 0,
   entries: {},
   banco: {},
-  nombre: ''
+  nombre: '',
+  vidaLaboralPct: null,
+  ultimaSincronizacionNube: null
 });
 
 let state = DEFAULT_STATE();
@@ -749,6 +800,23 @@ let state = DEFAULT_STATE();
 // registradas, como referencia para comparar tú mismo con el % de tu
 // contrato (CTP) que figura en el Informe de Vida Laboral.
 const JORNADA_ANUAL_CONVENIO = 1782;
+
+// ── Avisos de entradas raras o duplicadas (25/08/2026) ───────────────────────
+// Umbrales a partir de los cuales se avisa (no bloquea) antes de guardar.
+const UMBRAL_HORAS_AVISO = 6; // horas extra u horas nocturnas en un solo día
+const UMBRAL_KM_AVISO = 150;  // km en una ruta
+
+function calcularAvisosEntrada({ dia, hext = 0, hnoc = 0, km = 0, esRuta = false, entradasDelMes = [], especLibreConCero = false } = {}) {
+  const avisos = [];
+  if (dia != null && !esRuta && entradasDelMes.some(e => e.dia === dia)) {
+    avisos.push(`Ya hay una entrada el día ${dia}.`);
+  }
+  if (hext > UMBRAL_HORAS_AVISO) avisos.push(`${hext}h de horas extra es mucho para un solo día — revísalo.`);
+  if (hnoc > UMBRAL_HORAS_AVISO) avisos.push(`${hnoc}h de horas nocturnas es mucho para un solo día — revísalo.`);
+  if (esRuta && km > UMBRAL_KM_AVISO) avisos.push(`${km} km es una distancia grande — comprueba que no sobra un cero.`);
+  if (especLibreConCero) avisos.push('Has dejado las horas de "Especial" a 0.');
+  return avisos;
+}
 
 // Migración: añade "horas" a servicios guardados antes de esta mejora
 // (24/08/2026), para que el cálculo de horas no falle con perfiles antiguos.
@@ -867,7 +935,7 @@ async function saveProfile() {
 }
 
 // Alias — se puede llamar sin await
-function save() { saveProfile(); }
+function save() { saveProfile(); nubeAutoProgramarSubida(); }
 
 // ── Indicador "Guardado DD/MM/AA" ─────────────────────────────────────────
 function updateSavedIndicator() {
@@ -931,6 +999,9 @@ async function selectProfile(id) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelector('.tab-btn').classList.add('active');
   document.getElementById('sec-registrar').classList.add('active');
+  // Comprobar en segundo plano si hay una copia más nueva en la nube
+  // (no bloquea la apertura de la app: funciona sin conexión igual).
+  nubeAutoRestaurarSiHayMasNuevo();
 }
 
 function switchProfile() {
@@ -993,6 +1064,38 @@ function confirmCancel() {
   _confirmCallback = null;
 }
 
+// ── Ayuda dentro de la app (25/08/2026) ──────────────────────────────────────
+// Info puntual: un icono "❓" junto a un campo abre un globo corto con la
+// explicación de ese campo concreto, sin salir de donde se está.
+function showInfo(titulo, texto) {
+  document.getElementById('info-title').textContent = titulo;
+  document.getElementById('info-body').textContent = texto;
+  document.getElementById('info-modal').style.display = 'flex';
+}
+function closeInfo() {
+  document.getElementById('info-modal').style.display = 'none';
+}
+
+// Mini-manual dentro de la app: mismo contenido que la guía en PDF pero
+// resumido y navegable sin descargar nada — para consultar sin salir de la app.
+const AYUDA_SECCIONES = [
+  { titulo: 'Registrar un servicio', texto: 'Elige el día, el tipo de servicio y el lugar. Si vas en coche puedes marcarlo con un precio fijo por lugar, o "por km" si es una ruta con más de una parada (ver más abajo). Las horas extra y nocturnas son opcionales — se suman al total y al recuento de horas del mes.' },
+  { titulo: 'Servicio "Especial" (precio libre)', texto: 'Para eventos que no encajan en los tipos normales (Boda, Comida...). El precio y las horas se introducen a mano en cada entrada, y quedan "congelados" en esa entrada — si luego cambias algo de Configuración, las entradas ya registradas no cambian.' },
+  { titulo: 'Ruta con varias paradas (coche "por km")', texto: 'Cuando un mismo trayecto en coche incluye más de un servicio — por ejemplo, una Boda en Arzuaga y una Comida en Olmedo el mismo día, con el mismo coche — se registra como UNA ruta con varias paradas, no como dos entradas sueltas. Elige "Coche: por km", añade cada parada con su servicio y lugar (y su precio/horas si es "Especial"), y calcula o introduce los km de todo el trayecto. La app reparte las horas de cada parada por separado, pero el gasto de coche/gasolina se cuenta una sola vez para toda la ruta, no una vez por parada.' },
+  { titulo: 'Horas trabajadas y % de jornada', texto: 'En Registrar, dentro de un mes, verás cuántas horas has trabajado y qué % representan sobre la jornada completa del convenio (1.782 h/año) — para comparar con tu % de contrato (CTP). Puedes introducir a mano el % que figura en tu Informe de Vida Laboral y la app te muestra la diferencia directamente.' },
+  { titulo: 'IRPF', texto: 'El % de retención que se descuenta de lo que facturas. Cambiarlo aquí solo afecta a partir de ahora — las entradas ya registradas conservan el % que tenían en su momento.' },
+  { titulo: 'Copia de seguridad', texto: 'Con la sesión de nube iniciada (Configuración), la copia se sube y se baja sola tras cada cambio — no hace falta tocar nada. Los botones "Subir backup" / "Restaurar" son solo para forzarlo a mano si alguna vez hace falta. También puedes exportar un archivo a tu dispositivo como copia extra en cualquier momento.' },
+];
+function showAyuda() {
+  document.getElementById('ayuda-body').innerHTML = AYUDA_SECCIONES.map(s =>
+    `<div style="margin-bottom:14px;"><div style="font-weight:600;color:var(--text1);margin-bottom:3px;">${escHtml(s.titulo)}</div><div>${escHtml(s.texto)}</div></div>`
+  ).join('');
+  document.getElementById('ayuda-modal').style.display = 'flex';
+}
+function closeAyuda() {
+  document.getElementById('ayuda-modal').style.display = 'none';
+}
+
 async function deleteProfileConfirm(id) {
   const profiles = await getProfiles();
   const p = profiles.find(x => x.id === id);
@@ -1032,6 +1135,7 @@ function toggleDarkMode() {
   const isDark = document.body.classList.toggle('dark-mode');
   document.getElementById('dark-mode-btn').textContent = isDark ? '☀️' : '🌙';
   localStorage.setItem('exvall_dark_mode', isDark ? '1' : '0');
+  if (document.getElementById('grafico-ingresos')) renderGraficoIngresos();
 }
 function initDarkMode() {
   const saved = localStorage.getItem('exvall_dark_mode');
@@ -1160,11 +1264,18 @@ function horasEntry(e) {
     if (e.stops && e.stops.length > 0) {
       horasServ = e.stops.reduce((s, st) => {
         const sv = state.servicios.find(x => x.id === st.servId);
-        return s + (sv ? (sv.horas != null ? sv.horas : 4) : 0);
+        if (!sv) return s;
+        // Servicio precio libre (Especial): las horas se introducían a mano,
+        // no hay valor de configuración que aproximar — se usa lo guardado
+        // en la propia parada si existe, si no, 0.
+        if (sv.precio === 0) return s + (st.especHoras || 0);
+        return s + (sv.horas != null ? sv.horas : 4);
       }, 0);
     } else {
       const sv = state.servicios.find(x => x.id === e.servId);
-      horasServ = sv ? (sv.horas != null ? sv.horas : 4) : 0;
+      if (!sv) horasServ = 0;
+      else if (sv.precio === 0) horasServ = 0; // precio libre sin horasServ congelado: no hay nada que aproximar
+      else horasServ = sv.horas != null ? sv.horas : 4;
     }
   }
   return horasServ + (e.hext || 0) + (e.hnoc || 0);
@@ -1175,6 +1286,18 @@ function calcHorasMes(entries) {
   const jornadaMensual = JORNADA_ANUAL_CONVENIO / 12;
   const pctJornada = jornadaMensual > 0 ? (horas / jornadaMensual * 100) : 0;
   return { horas, pctJornada };
+}
+
+// Vida Laboral (24/08/2026): al ser trabajadores fijos, el Informe de Vida
+// Laboral no tiene información día a día que cruzar automáticamente, solo
+// un % de jornada (CTP) del periodo de alta continuo. Por eso este dato se
+// introduce a mano, para poder comparar dentro de la app con el % real
+// calculado a partir de las horas registradas.
+function updateVidaLaboralPct(v) {
+  const n = parseFloat(v);
+  state.vidaLaboralPct = (v === '' || isNaN(n)) ? null : Math.max(0, Math.min(100, n));
+  save();
+  renderEntries();
 }
 
 function onDiaChange() {
@@ -1233,7 +1356,12 @@ function onServicioChange() {
   const isLib = serv && serv.precio === 0;
   document.getElementById('f-especial-desc-wrap').style.display = isLib ? '' : 'none';
   document.getElementById('f-especial-precio-wrap').style.display = isLib ? '' : 'none';
-  if (!isLib) { document.getElementById('f-manual').value = ''; document.getElementById('f-especial-desc').value = ''; }
+  document.getElementById('f-especial-horas-wrap').style.display = isLib ? '' : 'none';
+  if (!isLib) {
+    document.getElementById('f-manual').value = '';
+    document.getElementById('f-especial-desc').value = '';
+    document.getElementById('f-especial-horas').value = '';
+  }
   calcTotal();
 }
 
@@ -1292,12 +1420,14 @@ function addStop() {
   const serv = state.servicios.find(s => s.id === servId);
   const especDesc   = serv && serv.precio === 0 ? document.getElementById('stop-especial-desc').value.trim() : '';
   const especPrecio = serv && serv.precio === 0 ? parseFloat(document.getElementById('stop-especial-precio').value) || 0 : 0;
+  const especHoras  = serv && serv.precio === 0 ? parseFloat(document.getElementById('stop-especial-horas').value) || 0 : 0;
   if (serv && serv.precio === 0 && especPrecio === 0) { showToast('Introduce el precio para el servicio Especial.', 'err'); return; }
-  routeStops.push({lugId, servId, especDesc, especPrecio});
+  routeStops.push({lugId, servId, especDesc, especPrecio, especHoras});
   document.getElementById('stop-lugar').value = '';
   document.getElementById('stop-servicio').value = '';
   document.getElementById('stop-especial-desc').value = '';
   document.getElementById('stop-especial-precio').value = '';
+  document.getElementById('stop-especial-horas').value = '';
   document.getElementById('stop-especial-wrap').style.display = 'none';
   calculatedKm = 0;
   document.getElementById('route-info').style.display = 'none';
@@ -1460,15 +1590,19 @@ function addEntry() {
   if (coche === 'km') {
     routeStops.forEach(s => {
       const sv = state.servicios.find(x => x.id === s.servId);
-      if (sv) horasServ += (sv.horas != null ? sv.horas : 4);
+      if (sv && sv.precio === 0) horasServ += (s.especHoras || 0);
+      else if (sv) horasServ += (sv.horas != null ? sv.horas : 4);
     });
+  } else if (serv && serv.precio === 0) {
+    // Servicio "precio libre" (ej. Especial): las horas también se introducen
+    // a mano, igual que el precio — no usa el valor fijo de Configuración.
+    horasServ = parseFloat(document.getElementById('f-especial-horas').value) || 0;
   } else {
     horasServ = serv ? (serv.horas != null ? serv.horas : 4) : 0;
   }
 
   const key = getKey();
-  if (!state.entries[key]) state.entries[key] = [];
-  state.entries[key].push({
+  const entryData = {
     dia, servId: coche==='km'?null:servId, lugId: coche==='km'?null:lugId,
     coche, hext, hnoc, manual, especDesc, km, total,
     irpf: state.irpf,
@@ -1476,14 +1610,38 @@ function addEntry() {
     stops: coche==='km' ? [...routeStops] : [],
     nota: nota || '',
     createdAt: new Date().toISOString()
+  };
+
+  // Avisos no bloqueantes (25/08/2026): día duplicado, horas u km fuera de lo
+  // normal, horas de "Especial" dejadas a 0 — se piden confirmar, no impiden
+  // guardar (salvo el precio de Especial a 0, que ya se valida arriba).
+  const especLibreConCero = coche === 'km'
+    ? routeStops.some(s => { const sv = state.servicios.find(x => x.id === s.servId); return sv && sv.precio === 0 && !(s.especHoras > 0); })
+    : (serv && serv.precio === 0 && horasServ === 0);
+  const avisos = calcularAvisosEntrada({
+    dia, hext, hnoc, km, esRuta: coche === 'km',
+    entradasDelMes: state.entries[key] || [],
+    especLibreConCero,
   });
+
+  if (avisos.length > 0) {
+    showConfirm('Antes de guardar...', avisos.join('\n'), 'Guardar de todas formas', () => _addEntryReal(key, entryData));
+  } else {
+    _addEntryReal(key, entryData);
+  }
+}
+
+function _addEntryReal(key, entryData) {
+  if (!state.entries[key]) state.entries[key] = [];
+  state.entries[key].push(entryData);
   state.entries[key].sort((a, b) => a.dia - b.dia);
   save();
 
   showToast('Entrada añadida ✓', 'ok');
-  ['f-dia','f-hext','f-hnoc','f-manual','f-km-manual','f-especial-desc','f-nota'].forEach(id => document.getElementById(id).value = '');
+  ['f-dia','f-hext','f-hnoc','f-manual','f-km-manual','f-especial-desc','f-especial-horas','f-nota'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-especial-desc-wrap').style.display = 'none';
   document.getElementById('f-especial-precio-wrap').style.display = 'none';
+  document.getElementById('f-especial-horas-wrap').style.display = 'none';
   routeStops = []; calculatedKm = 0;
   document.getElementById('route-info').style.display = 'none';
   document.getElementById('f-coche').value = 'no';
@@ -1537,7 +1695,16 @@ function renderEntries() {
       <div><span style="color:var(--text3);">Horas totales:</span> <strong>${horasMes.toFixed(1).replace('.',',')} h</strong></div>
       <div><span style="color:var(--text3);">% de jornada completa (convenio, ${JORNADA_ANUAL_CONVENIO}h/año):</span> <strong>${pctJornada.toFixed(1).replace('.',',')} %</strong></div>
     </div>
-    <p style="font-size:11px;color:var(--text3);margin-top:6px;margin-bottom:0;">Compáralo tú mismo con el % de jornada (CTP) de tu contrato que figura en el Informe de Vida Laboral de la Seguridad Social.</p>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+      <span style="font-size:12px;color:var(--text3);">% jornada (CTP) según tu Vida Laboral:</span>
+      <button type="button" class="help-icon" onclick="showInfo('% de Vida Laboral', 'Es el % de jornada (CTP) que aparece en tu Informe de Vida Laboral de la Seguridad Social, junto al periodo de alta de la empresa. Introdúcelo aquí a mano y la app te muestra directamente la diferencia frente al % que calcula a partir de tus horas realmente registradas este mes.')" title="Ayuda con % de Vida Laboral">❓</button>
+      <input type="number" id="vida-laboral-pct" min="0" max="100" step="0.1" placeholder="ej: 100"
+        value="${state.vidaLaboralPct != null ? state.vidaLaboralPct : ''}"
+        style="width:80px;" onchange="updateVidaLaboralPct(this.value)">
+      <span style="font-size:12px;color:var(--text3);">%</span>
+      ${state.vidaLaboralPct != null ? `<span style="font-size:12px;color:var(--text2);">— diferencia: <strong>${(pctJornada - state.vidaLaboralPct).toFixed(1).replace('.',',')} pts</strong></span>` : ''}
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin-top:6px;margin-bottom:0;">Introduce a mano el % de jornada (CTP) que figura en tu Informe de Vida Laboral de la Seguridad Social, para comparar directamente aquí con las horas reales de este mes.</p>
   </div>
   <div class="card" style="margin-bottom:12px;">
     <div class="card-title">Dinero de este mes — desglosado</div>
@@ -1609,6 +1776,116 @@ function saveBanco(i, val) {
   state.banco[key] = parseFloat(val) || 0;
   save();
   renderResumen();
+}
+
+// ── Gráfico de ingresos y comparación entre años (25/08/2026) ────────────────
+function aniosConDatos() {
+  const anios = new Set();
+  Object.keys(state.entries || {}).forEach(k => {
+    const anio = parseInt(k.split('-')[0], 10);
+    if (!isNaN(anio)) anios.add(anio);
+  });
+  return Array.from(anios).sort((a, b) => b - a);
+}
+function ingresosPorMes(year) {
+  const arr = [];
+  for (let i = 0; i < 12; i++) {
+    const key = `${year}-${i}`;
+    const entries = (state.entries && state.entries[key]) || [];
+    arr.push(parseFloat(entries.reduce((s, e) => s + e.total, 0).toFixed(2)));
+  }
+  return arr;
+}
+let _anioComparar = null;
+function onAnioCompararChange(v) {
+  _anioComparar = v ? parseInt(v, 10) : null;
+  renderGraficoIngresos();
+}
+function renderGraficoIngresos() {
+  const cont = document.getElementById('grafico-ingresos-wrap');
+  if (!cont) return;
+  const actual = ingresosPorMes(currentYear);
+  const comparar = _anioComparar != null ? ingresosPorMes(_anioComparar) : null;
+  const totalActual = actual.reduce((s, v) => s + v, 0);
+  const totalComparar = comparar ? comparar.reduce((s, v) => s + v, 0) : null;
+  const diffPct = (comparar && totalComparar > 0) ? ((totalActual - totalComparar) / totalComparar * 100) : null;
+
+  const otrosAnios = aniosConDatos().filter(a => a !== currentYear);
+  const selectorHtml = otrosAnios.length > 0 ? `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <label style="font-size:12px;color:var(--text3);">Comparar con:</label>
+      <select onchange="onAnioCompararChange(this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);">
+        <option value="">— ninguno —</option>
+        ${otrosAnios.map(a => `<option value="${a}" ${_anioComparar === a ? 'selected' : ''}>${a}</option>`).join('')}
+      </select>
+    </div>` : '';
+
+  const fraseComparacion = (comparar && diffPct != null) ? `
+    <p style="font-size:12px;color:var(--text2);margin:6px 0 0;">
+      Llevas <strong>${totalActual.toFixed(2).replace('.',',')} €</strong> en ${currentYear} —
+      en ${_anioComparar} por estas mismas fechas ibas por <strong>${totalComparar.toFixed(2).replace('.',',')} €</strong>
+      (<span style="color:${diffPct >= 0 ? 'var(--success)' : 'var(--danger)'};">${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(1).replace('.',',')}%</span>)
+    </p>` : '';
+
+  cont.innerHTML = `<div class="card-title">Ingresos por mes (${currentYear})</div>
+    ${selectorHtml}
+    <canvas id="grafico-ingresos" style="width:100%;height:160px;display:block;"></canvas>
+    ${fraseComparacion}`;
+
+  // Dibujar tras insertar en el DOM, para que canvas.clientWidth ya sea real
+  requestAnimationFrame(() => dibujarGraficoIngresos(actual, comparar));
+}
+function dibujarGraficoIngresos(actual, comparar) {
+  const canvas = document.getElementById('grafico-ingresos');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || 300, h = canvas.clientHeight || 160;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const isDark = document.body.classList.contains('dark-mode');
+  const colorActual   = isDark ? '#52b788' : '#2d6a4f';
+  const colorComparar = isDark ? '#5a5a5a' : '#c9c9c9';
+  const colorTexto    = isDark ? '#a8a8a8' : '#666666';
+  const colorEje      = isDark ? '#3a3a3a' : '#e2e2e2';
+
+  const padLeft = 4, padBottom = 16, padTop = 4, padRight = 4;
+  const chartW = w - padLeft - padRight;
+  const chartH = h - padTop - padBottom;
+  const n = 12;
+  const groupW = chartW / n;
+  const max = Math.max(...actual, ...(comparar || []), 1);
+
+  ctx.strokeStyle = colorEje;
+  ctx.beginPath();
+  ctx.moveTo(padLeft, padTop + chartH);
+  ctx.lineTo(padLeft + chartW, padTop + chartH);
+  ctx.stroke();
+
+  ctx.font = '9px "DM Sans", sans-serif';
+  ctx.fillStyle = colorTexto;
+  ctx.textAlign = 'center';
+
+  const mesesCortos = ['E','F','M','A','My','Jn','Jl','Ag','S','O','N','D'];
+  for (let i = 0; i < n; i++) {
+    const x0 = padLeft + i * groupW + 3;
+    const barW = comparar ? (groupW - 6) / 2 : groupW - 6;
+
+    const hActual = max > 0 ? (actual[i] / max) * (chartH - 4) : 0;
+    ctx.fillStyle = colorActual;
+    ctx.fillRect(x0, padTop + chartH - hActual, Math.max(barW, 1), hActual);
+
+    if (comparar) {
+      const hComp = max > 0 ? (comparar[i] / max) * (chartH - 4) : 0;
+      ctx.fillStyle = colorComparar;
+      ctx.fillRect(x0 + barW + 1, padTop + chartH - hComp, Math.max(barW, 1), hComp);
+    }
+
+    ctx.fillStyle = colorTexto;
+    ctx.fillText(mesesCortos[i], padLeft + i * groupW + groupW / 2, padTop + chartH + 12);
+  }
 }
 
 function renderResumen() {
@@ -1691,6 +1968,7 @@ function renderResumen() {
       </tr></tfoot>
     </table></div>`;
 
+  renderGraficoIngresos();
   renderHistoricoHorasTipo();
 }
 
@@ -1709,12 +1987,15 @@ function renderHistoricoHorasTipo() {
     const entries = state.entries[key] || [];
     entries.forEach(e => {
       if (e.stops && e.stops.length > 0) {
-        // Rutas con varias paradas: cada parada cuenta como un servicio propio
+        // Rutas con varias paradas: cada parada cuenta como un servicio propio.
+        // El dinero de coche/km de la ruta es un único importe para toda la
+        // ruta (no por parada), así que aquí no hay nada de coche que restar.
         e.stops.forEach(st => {
           const sv = state.servicios.find(x => x.id === st.servId);
           const id = st.servId || '—';
           const nombre = sv ? sv.name : '?';
-          const horas = sv ? (sv.horas != null ? sv.horas : 4) : 0;
+          const esLibre = sv && sv.precio === 0;
+          const horas = esLibre ? (st.especHoras || 0) : (sv ? (sv.horas != null ? sv.horas : 4) : 0);
           const precio = sv ? (sv.precio > 0 ? sv.precio : (st.especPrecio || 0)) : 0;
           if (!acumulado[id]) acumulado[id] = { nombre, veces: 0, horas: 0, dinero: 0 };
           acumulado[id].veces += 1;
@@ -1728,7 +2009,11 @@ function renderHistoricoHorasTipo() {
         if (!acumulado[id]) acumulado[id] = { nombre, veces: 0, horas: 0, dinero: 0 };
         acumulado[id].veces += 1;
         acumulado[id].horas += horasEntry(e);
-        acumulado[id].dinero += e.total;
+        // Dinero solo del servicio (+ horas extra/nocturnas), sin el coche/gasolina
+        // — antes se sumaba e.total completo y salían cifras que no cuadraban
+        // con "nº de servicios × precio" (ej. 2 bodas de 80€ salían como 178€
+        // por incluir 18€ de coche de una de las entradas).
+        acumulado[id].dinero += e.total - (e.precioCoche || 0);
       }
     });
   });
@@ -2000,6 +2285,7 @@ function importBackup(event) {
       if (imported.servicios) state.servicios = imported.servicios;
       if (imported.lugares)   state.lugares   = imported.lugares;
       if (imported.extras)    state.extras    = imported.extras;
+      if (imported.vidaLaboralPct !== undefined) state.vidaLaboralPct = imported.vidaLaboralPct;
       migrarHorasServicios();
       save();
       renderMonths(); renderEntries(); populateDropdowns();
@@ -2286,8 +2572,10 @@ function openEditModal(idx) {
   const isEspec = serv && serv.precio === 0;
   document.getElementById('edit-especial-desc-wrap').style.display  = isEspec ? '' : 'none';
   document.getElementById('edit-especial-precio-wrap').style.display = isEspec ? '' : 'none';
+  document.getElementById('edit-especial-horas-wrap').style.display = isEspec ? '' : 'none';
   document.getElementById('edit-especial-desc').value  = e.especDesc || '';
   document.getElementById('edit-manual').value         = e.manual || '';
+  document.getElementById('edit-especial-horas').value = isEspec ? (e.horasServ || '') : '';
 
   // Km
   document.getElementById('edit-km-wrap').style.display = e.coche === 'km' ? '' : 'none';
@@ -2307,9 +2595,11 @@ function onEditServicioChange() {
   const isEspec = serv && serv.precio === 0;
   document.getElementById('edit-especial-desc-wrap').style.display  = isEspec ? '' : 'none';
   document.getElementById('edit-especial-precio-wrap').style.display = isEspec ? '' : 'none';
+  document.getElementById('edit-especial-horas-wrap').style.display = isEspec ? '' : 'none';
   if (!isEspec) {
     document.getElementById('edit-manual').value = '';
     document.getElementById('edit-especial-desc').value = '';
+    document.getElementById('edit-especial-horas').value = '';
   }
   calcEditTotal();
 }
@@ -2360,6 +2650,7 @@ function saveEditEntry() {
   const km      = parseFloat(document.getElementById('edit-km').value)     || 0;
   const nota    = document.getElementById('edit-nota').value.trim();
   const especDesc = document.getElementById('edit-especial-desc').value.trim();
+  const especHorasEdit = parseFloat(document.getElementById('edit-especial-horas').value) || 0;
 
   if (!dia || !servId || !lugId) {
     showToast('Rellena día, servicio y lugar.', 'err');
@@ -2387,7 +2678,7 @@ function saveEditEntry() {
   }]);
 
   // Actualizar la entrada conservando campos que no se editan (stops, createdAt...)
-  entries[_editIdx] = {
+  const entryActualizada = {
     ...e,
     dia,
     servId,
@@ -2402,12 +2693,30 @@ function saveEditEntry() {
     irpf: state.irpf,
     precioServ: serv ? (serv.precio > 0 ? serv.precio : manual) : 0,
     precioCoche,
-    horasServ: serv ? (serv.horas != null ? serv.horas : 4) : 0,
+    horasServ: serv ? (serv.precio === 0 ? especHorasEdit : (serv.horas != null ? serv.horas : 4)) : 0,
     nota,
     editedAt: new Date().toISOString(),
     historial: nuevoHistorial
   };
 
+  // Avisos no bloqueantes (25/08/2026), igual que al registrar — comparando
+  // contra el resto de entradas del mes (excluyendo la que se está editando).
+  const otrasEntradas = entries.filter((_, i) => i !== _editIdx);
+  const avisos = calcularAvisosEntrada({
+    dia, hext, hnoc, km, esRuta: coche === 'km',
+    entradasDelMes: otrasEntradas,
+    especLibreConCero: serv && serv.precio === 0 && especHorasEdit === 0,
+  });
+
+  if (avisos.length > 0) {
+    showConfirm('Antes de guardar...', avisos.join('\n'), 'Guardar de todas formas', () => _saveEditEntryReal(entries, entryActualizada));
+  } else {
+    _saveEditEntryReal(entries, entryActualizada);
+  }
+}
+
+function _saveEditEntryReal(entries, entryActualizada) {
+  entries[_editIdx] = entryActualizada;
   // Reordenar por día
   entries.sort((a, b) => a.dia - b.dia);
   state.entries[getKey()] = entries;
@@ -2527,10 +2836,102 @@ async function renderNube() {
     } catch(e) {
       document.getElementById('nube-ultimo-backup').textContent = '';
     }
+    nubeActualizarEstadoPanel();
   } else {
     loginSection.style.display   = 'block';
     sessionSection.style.display = 'none';
   }
+}
+
+// ── Copia de seguridad automática a la nube (25/08/2026) ────────────────────
+// Diseño: unos segundos después de cada cambio (save()) se sube sola a
+// Supabase, agrupando varios cambios seguidos en una sola subida. Al abrir
+// un perfil se comprueba si hay algo más nuevo en la nube y, si lo hay, se
+// baja solo antes de que el usuario empiece a trabajar. Si falla (sin
+// conexión, error), no se interrumpe el uso de la app — se reintenta en la
+// siguiente subida automática y queda reflejado en el panel de Configuración.
+let _nubeAutoTimer = null;
+let _nubeAutoEstado = { texto: '', tipo: 'info' }; // 'ok' | 'err' | 'info'
+const NUBE_AUTO_DEBOUNCE_MS = 8000;
+
+function nubeAutoProgramarSubida() {
+  if (!activeProfileId) return;
+  if (_nubeAutoTimer) clearTimeout(_nubeAutoTimer);
+  _nubeAutoTimer = setTimeout(() => { nubeAutoSubir(); }, NUBE_AUTO_DEBOUNCE_MS);
+}
+
+async function nubeAutoSubir() {
+  _nubeAutoTimer = null;
+  const session = await nubeGetSession();
+  if (!session || !activeProfileId) return; // sin sesión iniciada: no hay nada que subir
+  try {
+    const supa = await getSupa();
+    const { error } = await supa
+      .from('backups')
+      .upsert({
+        user_id:    session.user.id,
+        profile_id: activeProfileId,
+        data:       state,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,profile_id' });
+    if (error) throw error;
+    state.ultimaSincronizacionNube = new Date().toISOString();
+    // Guardar solo localmente (dbPut), sin pasar por save(), para no relanzar
+    // el propio temporizador de subida en bucle.
+    await dbPut('profileData', state, activeProfileId);
+    _nubeAutoEstado = { texto: '✓ Sincronizado automáticamente', tipo: 'ok' };
+  } catch(e) {
+    _nubeAutoEstado = { texto: 'Pendiente de subir (sin conexión o error) — se reintentará solo', tipo: 'err' };
+  }
+  nubeActualizarEstadoPanel();
+}
+
+// Al abrir un perfil: si hay una copia más nueva en la nube que la última
+// sincronización conocida de este dispositivo, se baja sola antes de que el
+// usuario empiece a trabajar (arrancar siempre con lo último).
+async function nubeAutoRestaurarSiHayMasNuevo() {
+  const session = await nubeGetSession();
+  if (!session || !activeProfileId) return;
+  try {
+    const supa = await getSupa();
+    const { data, error } = await supa
+      .from('backups')
+      .select('data, updated_at')
+      .eq('profile_id', activeProfileId)
+      .single();
+    if (error || !data || !data.updated_at) return; // no hay nada en la nube aún
+
+    const nubeFecha  = new Date(data.updated_at).getTime();
+    const localFecha = state.ultimaSincronizacionNube ? new Date(state.ultimaSincronizacionNube).getTime() : 0;
+    if (nubeFecha <= localFecha) return; // lo local ya está al día (o más nuevo, con cambios sin subir)
+
+    const importado = data.data;
+    state.entries   = importado.entries   || {};
+    state.banco     = importado.banco     || {};
+    if (importado.irpf)      state.irpf      = importado.irpf;
+    if (importado.irpfHist)  state.irpfHist  = importado.irpfHist;
+    if (importado.nombre)    state.nombre    = importado.nombre;
+    if (importado.servicios) state.servicios = importado.servicios;
+    if (importado.lugares)   state.lugares   = importado.lugares;
+    if (importado.extras)    state.extras    = importado.extras;
+    if (importado.objetivo !== undefined) state.objetivo = importado.objetivo;
+    if (importado.vidaLaboralPct !== undefined) state.vidaLaboralPct = importado.vidaLaboralPct;
+    migrarHorasServicios();
+    state.ultimaSincronizacionNube = new Date().toISOString();
+    await dbPut('profileData', state, activeProfileId);
+
+    renderMonths(); renderEntries(); populateDropdowns();
+    document.getElementById('irpf-input').value = state.irpf;
+    if (state.nombre) document.getElementById('app-name-display').textContent = state.nombre;
+    showToast('Datos actualizados desde la nube (había una copia más reciente)', 'ok');
+  } catch(e) { /* sin red o error puntual: se sigue trabajando con lo local */ }
+}
+
+function nubeActualizarEstadoPanel() {
+  const el = document.getElementById('nube-auto-estado');
+  if (!el) return;
+  el.textContent = _nubeAutoEstado.texto;
+  el.style.color = _nubeAutoEstado.tipo === 'err' ? 'var(--danger)' : (_nubeAutoEstado.tipo === 'ok' ? 'var(--success)' : 'var(--text2)');
 }
 
 // Login por magic link
@@ -2586,6 +2987,9 @@ async function nubeSubir() {
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id,profile_id' });
     if (error) throw error;
+    state.ultimaSincronizacionNube = new Date().toISOString();
+    if (_nubeAutoTimer) { clearTimeout(_nubeAutoTimer); _nubeAutoTimer = null; }
+    saveProfile();
     nubeMsg('nube-msg', '✓ Backup subido correctamente a la nube.', 'ok');
     renderNube();
     showToast('Backup en la nube actualizado', 'ok');
@@ -2629,7 +3033,9 @@ async function nubeRestaurar() {
         if (importado.lugares)   state.lugares   = importado.lugares;
         if (importado.extras)    state.extras    = importado.extras;
         if (importado.objetivo !== undefined) state.objetivo = importado.objetivo;
+        if (importado.vidaLaboralPct !== undefined) state.vidaLaboralPct = importado.vidaLaboralPct;
         migrarHorasServicios();
+        state.ultimaSincronizacionNube = new Date().toISOString();
         await saveProfile();
         renderMonths(); renderEntries(); populateDropdowns();
         document.getElementById('irpf-input').value = state.irpf;

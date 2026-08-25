@@ -21,6 +21,12 @@ import {
   horasEntry,
   calcHorasMes,
   JORNADA_ANUAL_CONVENIO,
+  calcularAvisosEntrada,
+  UMBRAL_HORAS_AVISO,
+  UMBRAL_KM_AVISO,
+  aniosConDatos,
+  ingresosPorMes,
+  compararAnios,
 } from './logica.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -347,6 +353,26 @@ describe('aplicarBackup — ciclo exportar → importar', () => {
     expect(nuevo.banco).toEqual({});
   });
 
+  it('El % de Vida Laboral viaja con el backup si está presente', () => {
+    const estadoActual = DEFAULT_STATE();
+    const backup = {
+      entries: {}, servicios: estadoActual.servicios, lugares: estadoActual.lugares,
+      extras: estadoActual.extras, irpf: 8, vidaLaboralPct: 87.5,
+    };
+    const nuevo = aplicarBackup(estadoActual, backup);
+    expect(nuevo.vidaLaboralPct).toBe(87.5);
+  });
+
+  it('El % de Vida Laboral se conserva del estado actual si el backup no lo trae', () => {
+    const estadoActual = { ...DEFAULT_STATE(), vidaLaboralPct: 95 };
+    const backup = {
+      entries: {}, servicios: estadoActual.servicios, lugares: estadoActual.lugares,
+      extras: estadoActual.extras, irpf: 8,
+    };
+    const nuevo = aplicarBackup(estadoActual, backup);
+    expect(nuevo.vidaLaboralPct).toBe(95);
+  });
+
 });
 
 describe('contarEntradas', () => {
@@ -481,6 +507,16 @@ describe('migrarHorasServicios', () => {
     expect(resto.horas).toBe(4);
   });
 
+  it('DEFAULT_STATE trae vidaLaboralPct a null (sin dato introducido)', () => {
+    const state = DEFAULT_STATE();
+    expect(state.vidaLaboralPct).toBeNull();
+  });
+
+  it('DEFAULT_STATE trae ultimaSincronizacionNube a null (sin sincronizar aún)', () => {
+    const state = DEFAULT_STATE();
+    expect(state.ultimaSincronizacionNube).toBeNull();
+  });
+
 });
 
 describe('horasEntry', () => {
@@ -510,6 +546,157 @@ describe('horasEntry', () => {
       hext: 0, hnoc: 0,
     };
     expect(horasEntry(e, state)).toBe(8); // 5 + 3
+  });
+
+  it('Servicio Especial (precio libre) usa el horasServ congelado a mano', () => {
+    const state = mkState();
+    const e = { servId: 'especial', horasServ: 6, hext: 0, hnoc: 0 };
+    expect(horasEntry(e, state)).toBe(6);
+  });
+
+  it('Servicio Especial antiguo sin horasServ congelado → 0 (no hay valor que aproximar)', () => {
+    const state = mkState();
+    const e = { servId: 'especial', hext: 0, hnoc: 0 }; // sin horasServ
+    expect(horasEntry(e, state)).toBe(0);
+  });
+
+  it('Parada Especial (stop) en ruta antigua usa especHoras de la propia parada', () => {
+    const state = mkState();
+    const e = {
+      stops: [{ servId: 'especial', especHoras: 3 }, { servId: 'boda' }],
+      hext: 0, hnoc: 0,
+    };
+    expect(horasEntry(e, state)).toBe(8); // 3 + 5
+  });
+
+  it('Parada Especial (stop) antigua sin especHoras → 0 para esa parada', () => {
+    const state = mkState();
+    const e = {
+      stops: [{ servId: 'especial' }, { servId: 'boda' }],
+      hext: 0, hnoc: 0,
+    };
+    expect(horasEntry(e, state)).toBe(5); // 0 + 5
+  });
+
+});
+
+describe('calcularAvisosEntrada', () => {
+
+  it('Sin nada raro, no hay avisos', () => {
+    const avisos = calcularAvisosEntrada({ dia: 5, hext: 1, hnoc: 0, entradasDelMes: [] });
+    expect(avisos).toEqual([]);
+  });
+
+  it('Avisa si ya hay una entrada ese mismo día (no ruta)', () => {
+    const avisos = calcularAvisosEntrada({ dia: 5, entradasDelMes: [{ dia: 5 }] });
+    expect(avisos.some(a => a.includes('Ya hay una entrada'))).toBe(true);
+  });
+
+  it('No avisa de día duplicado si es una ruta (esRuta:true)', () => {
+    const avisos = calcularAvisosEntrada({ dia: 5, esRuta: true, entradasDelMes: [{ dia: 5 }] });
+    expect(avisos.some(a => a.includes('Ya hay una entrada'))).toBe(false);
+  });
+
+  it(`Avisa si las horas extra superan el umbral (${UMBRAL_HORAS_AVISO}h)`, () => {
+    const avisos = calcularAvisosEntrada({ dia: 5, hext: UMBRAL_HORAS_AVISO + 1, entradasDelMes: [] });
+    expect(avisos.some(a => a.includes('horas extra'))).toBe(true);
+  });
+
+  it(`No avisa si las horas extra están justo en el umbral (${UMBRAL_HORAS_AVISO}h)`, () => {
+    const avisos = calcularAvisosEntrada({ dia: 5, hext: UMBRAL_HORAS_AVISO, entradasDelMes: [] });
+    expect(avisos.some(a => a.includes('horas extra'))).toBe(false);
+  });
+
+  it(`Avisa si las horas nocturnas superan el umbral (${UMBRAL_HORAS_AVISO}h)`, () => {
+    const avisos = calcularAvisosEntrada({ dia: 5, hnoc: UMBRAL_HORAS_AVISO + 1, entradasDelMes: [] });
+    expect(avisos.some(a => a.includes('horas nocturnas'))).toBe(true);
+  });
+
+  it(`Avisa si los km de una ruta superan el umbral (${UMBRAL_KM_AVISO}km)`, () => {
+    const avisos = calcularAvisosEntrada({ dia: 5, esRuta: true, km: UMBRAL_KM_AVISO + 1, entradasDelMes: [] });
+    expect(avisos.some(a => a.includes('km'))).toBe(true);
+  });
+
+  it('No avisa de km si no es una ruta, aunque el valor sea alto', () => {
+    const avisos = calcularAvisosEntrada({ dia: 5, esRuta: false, km: 999, entradasDelMes: [] });
+    expect(avisos.some(a => a.includes('km'))).toBe(false);
+  });
+
+  it('Avisa si el servicio Especial se deja con 0 horas', () => {
+    const avisos = calcularAvisosEntrada({ dia: 5, especLibreConCero: true, entradasDelMes: [] });
+    expect(avisos.some(a => a.includes('Especial'))).toBe(true);
+  });
+
+  it('Junta varios avisos a la vez si aplican varias reglas', () => {
+    const avisos = calcularAvisosEntrada({
+      dia: 5, hext: 10, hnoc: 8, entradasDelMes: [{ dia: 5 }], especLibreConCero: true,
+    });
+    expect(avisos.length).toBe(4);
+  });
+
+});
+
+describe('aniosConDatos', () => {
+
+  it('Devuelve una lista vacía si no hay entradas', () => {
+    const state = mkState();
+    expect(aniosConDatos(state)).toEqual([]);
+  });
+
+  it('Extrae los años con datos, sin duplicados y ordenados de más reciente a más antiguo', () => {
+    const state = mkState({ entries: {
+      '2024-0': [{ dia: 1, total: 50 }],
+      '2024-5': [{ dia: 1, total: 50 }],
+      '2025-3': [{ dia: 1, total: 50 }],
+    }});
+    expect(aniosConDatos(state)).toEqual([2025, 2024]);
+  });
+
+});
+
+describe('ingresosPorMes', () => {
+
+  it('Devuelve 12 posiciones (Enero-Diciembre), a 0 si no hay entradas ese mes', () => {
+    const state = mkState({ entries: { '2025-2': [{ dia: 1, total: 80 }] } });
+    const arr = ingresosPorMes(state, 2025);
+    expect(arr).toHaveLength(12);
+    expect(arr[2]).toBe(80);
+    expect(arr[0]).toBe(0);
+  });
+
+  it('Suma varias entradas del mismo mes', () => {
+    const state = mkState({ entries: { '2025-0': [{ dia: 1, total: 80 }, { dia: 5, total: 45 }] } });
+    expect(ingresosPorMes(state, 2025)[0]).toBe(125);
+  });
+
+});
+
+describe('compararAnios', () => {
+
+  it('Sin año de comparación, solo devuelve los datos del año actual', () => {
+    const state = mkState({ entries: { '2025-0': [{ dia: 1, total: 100 }] } });
+    const r = compararAnios(state, 2025, null);
+    expect(r.totalActual).toBe(100);
+    expect(r.comparar).toBeNull();
+    expect(r.diffPct).toBeNull();
+  });
+
+  it('Con año de comparación, calcula el % de diferencia correctamente', () => {
+    const state = mkState({ entries: {
+      '2025-0': [{ dia: 1, total: 110 }],
+      '2024-0': [{ dia: 1, total: 100 }],
+    }});
+    const r = compararAnios(state, 2025, 2024);
+    expect(r.totalActual).toBe(110);
+    expect(r.totalComparar).toBe(100);
+    expect(r.diffPct).toBe(10);
+  });
+
+  it('diffPct es null si el año de comparación no tiene ingresos (evita división por 0)', () => {
+    const state = mkState({ entries: { '2025-0': [{ dia: 1, total: 100 }] } });
+    const r = compararAnios(state, 2025, 2023);
+    expect(r.totalComparar).toBe(0);
+    expect(r.diffPct).toBeNull();
   });
 
 });

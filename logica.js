@@ -39,6 +39,8 @@ export const DEFAULT_STATE = () => ({
   banco:   {},
   nombre:  '',
   papelera: [], // rastro de auditoría de entradas eliminadas
+  vidaLaboralPct: null, // % de jornada (CTP) según el Informe de Vida Laboral, introducido a mano
+  ultimaSincronizacionNube: null, // ISO timestamp de la última subida/bajada automática a la nube
 });
 
 // ── Cálculo de totales ────────────────────────────────────────────────────────
@@ -183,6 +185,8 @@ export function aplicarBackup(estadoActual, importado) {
     // La papelera (rastro de auditoría) también viaja con el backup, para no
     // perder el historial de entradas eliminadas al restaurar en otro dispositivo.
     papelera:  importado.papelera  || estadoActual.papelera || [],
+    vidaLaboralPct: importado.vidaLaboralPct !== undefined ? importado.vidaLaboralPct : (estadoActual.vidaLaboralPct ?? null),
+    ultimaSincronizacionNube: importado.ultimaSincronizacionNube !== undefined ? importado.ultimaSincronizacionNube : (estadoActual.ultimaSincronizacionNube ?? null),
   };
 }
 
@@ -259,16 +263,26 @@ export function migrarHorasServicios(servicios) {
  * @returns {number}
  */
 export function horasEntry(e, state) {
+  // Entradas antiguas (antes de esta mejora) no tienen horasServ guardado:
+  // se calcula al vuelo con la configuración actual de servicios como mejor
+  // aproximación posible.
   let horasServ = e.horasServ;
   if (horasServ == null) {
     if (e.stops && e.stops.length > 0) {
       horasServ = e.stops.reduce((s, st) => {
         const sv = state.servicios.find(x => x.id === st.servId);
-        return s + (sv ? (sv.horas != null ? sv.horas : 4) : 0);
+        if (!sv) return s;
+        // Servicio precio libre (Especial): las horas se introducían a mano,
+        // no hay valor de configuración que aproximar — se usa lo guardado
+        // en la propia parada si existe, si no, 0.
+        if (sv.precio === 0) return s + (st.especHoras || 0);
+        return s + (sv.horas != null ? sv.horas : 4);
       }, 0);
     } else {
       const sv = state.servicios.find(x => x.id === e.servId);
-      horasServ = sv ? (sv.horas != null ? sv.horas : 4) : 0;
+      if (!sv) horasServ = 0;
+      else if (sv.precio === 0) horasServ = 0; // precio libre sin horasServ congelado: no hay nada que aproximar
+      else horasServ = sv.horas != null ? sv.horas : 4;
     }
   }
   return horasServ + (e.hext || 0) + (e.hnoc || 0);
@@ -286,6 +300,103 @@ export function calcHorasMes(entries, state) {
   const jornadaMensual = JORNADA_ANUAL_CONVENIO / 12;
   const pctJornada = jornadaMensual > 0 ? parseFloat((horas / jornadaMensual * 100).toFixed(2)) : 0;
   return { horas: parseFloat(horas.toFixed(2)), pctJornada };
+}
+
+// ── Avisos de entradas raras o duplicadas (25/08/2026) ───────────────────────
+
+/** Umbral de horas extra/nocturnas en un solo día a partir del cual se avisa. */
+export const UMBRAL_HORAS_AVISO = 6;
+
+/** Umbral de kilómetros en una ruta a partir del cual se avisa. */
+export const UMBRAL_KM_AVISO = 150;
+
+/**
+ * Calcula los avisos (no bloqueantes) que aplican a una entrada antes de
+ * guardarla: día duplicado, horas extra/nocturnas fuera de lo normal, km
+ * fuera de lo normal, y horas de "Especial" dejadas a 0. Ninguno de estos
+ * avisos impide guardar — solo piden confirmación al usuario.
+ * @param {object} params
+ * @param {number}   params.dia
+ * @param {number}   [params.hext]
+ * @param {number}   [params.hnoc]
+ * @param {number}   [params.km]
+ * @param {boolean}  [params.esRuta]           - true si el coche es "por km"
+ * @param {Array}    [params.entradasDelMes]   - entradas ya guardadas ese mes
+ * @param {boolean}  [params.especLibreConCero] - true si hay algún servicio de precio libre con 0h
+ * @returns {string[]} lista de avisos (vacía si no hay ninguno)
+ */
+export function calcularAvisosEntrada({
+  dia, hext = 0, hnoc = 0, km = 0, esRuta = false,
+  entradasDelMes = [], especLibreConCero = false,
+} = {}) {
+  const avisos = [];
+  if (dia != null && !esRuta && entradasDelMes.some(e => e.dia === dia)) {
+    avisos.push(`Ya hay una entrada el día ${dia}.`);
+  }
+  if (hext > UMBRAL_HORAS_AVISO) {
+    avisos.push(`${hext}h de horas extra es mucho para un solo día — revísalo.`);
+  }
+  if (hnoc > UMBRAL_HORAS_AVISO) {
+    avisos.push(`${hnoc}h de horas nocturnas es mucho para un solo día — revísalo.`);
+  }
+  if (esRuta && km > UMBRAL_KM_AVISO) {
+    avisos.push(`${km} km es una distancia grande — comprueba que no sobra un cero.`);
+  }
+  if (especLibreConCero) {
+    avisos.push('Has dejado las horas de "Especial" a 0.');
+  }
+  return avisos;
+}
+
+// ── Gráfico de ingresos y comparación entre años (25/08/2026) ────────────────
+
+/**
+ * Años (número) para los que hay al menos una entrada en el estado.
+ * @param {object} state
+ * @returns {number[]} años ordenados de más reciente a más antiguo
+ */
+export function aniosConDatos(state) {
+  const anios = new Set();
+  Object.keys((state && state.entries) || {}).forEach(k => {
+    const anio = parseInt(k.split('-')[0], 10);
+    if (!isNaN(anio)) anios.add(anio);
+  });
+  return Array.from(anios).sort((a, b) => b - a);
+}
+
+/**
+ * Ingresos brutos por mes (12 valores, Enero a Diciembre) de un año dado.
+ * @param {object} state
+ * @param {number} year
+ * @returns {number[]}
+ */
+export function ingresosPorMes(state, year) {
+  const arr = [];
+  for (let i = 0; i < 12; i++) {
+    const key = `${year}-${i}`;
+    const entries = (state && state.entries && state.entries[key]) || [];
+    arr.push(parseFloat(entries.reduce((s, e) => s + e.total, 0).toFixed(2)));
+  }
+  return arr;
+}
+
+/**
+ * Datos listos para el gráfico de ingresos y su comparación opcional con
+ * otro año.
+ * @param {object} state
+ * @param {number} anioActual
+ * @param {number|null} [anioComparar]
+ * @returns {{actual:number[], comparar:number[]|null, totalActual:number, totalComparar:number|null, diffPct:number|null}}
+ */
+export function compararAnios(state, anioActual, anioComparar) {
+  const actual = ingresosPorMes(state, anioActual);
+  const comparar = (anioComparar != null) ? ingresosPorMes(state, anioComparar) : null;
+  const totalActual = parseFloat(actual.reduce((s, v) => s + v, 0).toFixed(2));
+  const totalComparar = comparar ? parseFloat(comparar.reduce((s, v) => s + v, 0).toFixed(2)) : null;
+  const diffPct = (comparar && totalComparar > 0)
+    ? parseFloat(((totalActual - totalComparar) / totalComparar * 100).toFixed(1))
+    : null;
+  return { actual, comparar, totalActual, totalComparar, diffPct };
 }
 
 // ── Normalización para PDF ────────────────────────────────────────────────────

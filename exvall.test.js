@@ -27,6 +27,16 @@ import {
   aniosConDatos,
   ingresosPorMes,
   compararAnios,
+  datosCocheAnual,
+  datosCocheMensual,
+  kmEntryCoche,
+  migrarKmLugares,
+  kmEntryFijo,
+  sembrarKmConocidos,
+  KM_POR_DEFECTO_LUGAR,
+  resembrarKmV2,
+  migrarVidaLaboralPorMes,
+  vidaLaboralDelMes,
 } from './logica.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -519,6 +529,198 @@ describe('migrarHorasServicios', () => {
 
 });
 
+describe('migrarKmLugares', () => {
+
+  it('Añade km a 0 a los lugares que no tienen ese campo', () => {
+    const lugares = [
+      { id: 'olmedo', name: 'Olmedo', coche: 20 },
+      { id: 'arzuaga', name: 'Arzuaga', coche: 18 },
+    ];
+    migrarKmLugares(lugares);
+    expect(lugares[0].km).toBe(0);
+    expect(lugares[1].km).toBe(0);
+  });
+
+  it('No sobrescribe el km si ya existe', () => {
+    const lugares = [{ id: 'olmedo', name: 'Olmedo', coche: 20, km: 35 }];
+    migrarKmLugares(lugares);
+    expect(lugares[0].km).toBe(35);
+  });
+
+  it('DEFAULT_STATE ya trae km a 0 en todos los lugares', () => {
+    const state = DEFAULT_STATE();
+    expect(state.lugares.every(l => l.km === 0)).toBe(true);
+  });
+
+});
+
+describe('sembrarKmConocidos', () => {
+
+  it('Rellena todos los lugares con km conocido, dejando a 0 solo "otro" (sin km configurado)', () => {
+    const state = DEFAULT_STATE();
+    sembrarKmConocidos(state);
+    expect(state.lugares.find(l => l.id === 'olmedo').km).toBe(KM_POR_DEFECTO_LUGAR.olmedo);
+    expect(state.lugares.find(l => l.id === 'arzuaga').km).toBe(KM_POR_DEFECTO_LUGAR.arzuaga);
+    expect(state.lugares.find(l => l.id === 'valbuena').km).toBe(KM_POR_DEFECTO_LUGAR.valbuena);
+    expect(state.lugares.find(l => l.id === 'afpesquera').km).toBe(KM_POR_DEFECTO_LUGAR.afpesquera);
+    expect(state.lugares.find(l => l.id === 'medinarioseco').km).toBe(KM_POR_DEFECTO_LUGAR.medinarioseco);
+    expect(state.lugares.find(l => l.id === 'concejo').km).toBe(KM_POR_DEFECTO_LUGAR.concejo);
+    expect(state.lugares.find(l => l.id === 'montico').km).toBe(KM_POR_DEFECTO_LUGAR.montico);
+    // Sin km configurado (no tiene sentido para un catch-all genérico): se queda en 0
+    expect(state.lugares.find(l => l.id === 'otro').km).toBe(0);
+    expect(state._kmSembrado).toBe(true);
+  });
+
+  it('Solo se ejecuta una vez: no pisa un km que el usuario haya cambiado él mismo después', () => {
+    const state = DEFAULT_STATE();
+    sembrarKmConocidos(state);
+    // El usuario decide cambiar el km de Olmedo a mano después de la siembra
+    state.lugares.find(l => l.id === 'olmedo').km = 5;
+    sembrarKmConocidos(state); // segunda llamada, no debería hacer nada
+    expect(state.lugares.find(l => l.id === 'olmedo').km).toBe(5);
+  });
+
+  it('No toca lugares personalizados añadidos por el usuario (id desconocido)', () => {
+    const state = DEFAULT_STATE();
+    state.lugares.push({ id: 'mi-lugar-custom', name: 'Mi lugar', coche: 10, km: 0 });
+    sembrarKmConocidos(state);
+    expect(state.lugares.find(l => l.id === 'mi-lugar-custom').km).toBe(0);
+  });
+
+});
+
+describe('resembrarKmV2', () => {
+
+  it('Corrige un lugar que tenía el valor viejo (V1, solo ida) sin tocar, al nuevo (ida y vuelta)', () => {
+    const state = DEFAULT_STATE();
+    // Simula un perfil ya sembrado con la primera versión (solo ida)
+    state.lugares.find(l => l.id === 'olmedo').km = 43; // V1
+    state._kmSembrado = true;
+    resembrarKmV2(state);
+    expect(state.lugares.find(l => l.id === 'olmedo').km).toBe(KM_POR_DEFECTO_LUGAR.olmedo); // 81
+    expect(state._kmSembradoV2).toBe(true);
+  });
+
+  it('Rellena "concejo" y "montico" aunque sigan a 0 (la V1 no los incluía)', () => {
+    const state = DEFAULT_STATE();
+    state._kmSembrado = true; // ya sembrado con V1, concejo/montico se quedaron a 0
+    resembrarKmV2(state);
+    expect(state.lugares.find(l => l.id === 'concejo').km).toBe(KM_POR_DEFECTO_LUGAR.concejo);
+    expect(state.lugares.find(l => l.id === 'montico').km).toBe(KM_POR_DEFECTO_LUGAR.montico);
+  });
+
+  it('NO pisa un km que el usuario haya cambiado él mismo a otro valor cualquiera', () => {
+    const state = DEFAULT_STATE();
+    state.lugares.find(l => l.id === 'olmedo').km = 25; // el usuario lo puso a mano
+    state._kmSembrado = true;
+    resembrarKmV2(state);
+    expect(state.lugares.find(l => l.id === 'olmedo').km).toBe(25);
+  });
+
+  it('Solo se ejecuta una vez', () => {
+    const state = DEFAULT_STATE();
+    state._kmSembrado = true;
+    resembrarKmV2(state);
+    state.lugares.find(l => l.id === 'olmedo').km = 5; // el usuario lo cambia después
+    resembrarKmV2(state); // segunda llamada, no debería tocar nada
+    expect(state.lugares.find(l => l.id === 'olmedo').km).toBe(5);
+  });
+
+});
+
+describe('kmEntryFijo', () => {
+
+  it('Ruta "por km": devuelve los km pasados', () => {
+    expect(kmEntryFijo({ coche: 'km', km: 42 })).toBe(42);
+  });
+
+  it('Ruta "por km" sin km → 0', () => {
+    expect(kmEntryFijo({ coche: 'km' })).toBe(0);
+  });
+
+  it('Precio fijo ("si") con lugar con km configurado: congela ese km', () => {
+    const lug = { id: 'olmedo', name: 'Olmedo', coche: 20, km: 33 };
+    expect(kmEntryFijo({ coche: 'si', lug })).toBe(33);
+  });
+
+  it('Precio fijo ("si") con lugar sin km configurado (0 por defecto)', () => {
+    const lug = { id: 'arzuaga', name: 'Arzuaga', coche: 18, km: 0 };
+    expect(kmEntryFijo({ coche: 'si', lug })).toBe(0);
+  });
+
+  it('Precio fijo ("si") sin lugar resuelto → 0', () => {
+    expect(kmEntryFijo({ coche: 'si', lug: null })).toBe(0);
+  });
+
+  it('Sin coche ("no") → 0', () => {
+    const lug = { id: 'olmedo', name: 'Olmedo', coche: 20, km: 33 };
+    expect(kmEntryFijo({ coche: 'no', lug })).toBe(0);
+  });
+
+});
+
+describe('migrarVidaLaboralPorMes', () => {
+
+  it('DEFAULT_STATE ya trae vidaLaboralPorMes vacío', () => {
+    const state = DEFAULT_STATE();
+    expect(state.vidaLaboralPorMes).toEqual({});
+  });
+
+  it('Migra el valor único antiguo al mes/año indicado', () => {
+    const state = DEFAULT_STATE();
+    state.vidaLaboralPct = 100;
+    migrarVidaLaboralPorMes(state, 2026, 7); // Agosto
+    expect(state.vidaLaboralPorMes['2026-7']).toBe(100);
+    expect(state._vidaLaboralMigrado).toBe(true);
+  });
+
+  it('No hace nada si no había valor único antiguo', () => {
+    const state = DEFAULT_STATE();
+    migrarVidaLaboralPorMes(state, 2026, 7);
+    expect(state.vidaLaboralPorMes).toEqual({});
+  });
+
+  it('Solo migra una vez: no pisa un valor de ese mes ya introducido después', () => {
+    const state = DEFAULT_STATE();
+    state.vidaLaboralPct = 100;
+    migrarVidaLaboralPorMes(state, 2026, 7);
+    state.vidaLaboralPorMes['2026-7'] = 50; // el usuario lo cambia a mano
+    migrarVidaLaboralPorMes(state, 2026, 7); // segunda llamada, no debería tocar nada
+    expect(state.vidaLaboralPorMes['2026-7']).toBe(50);
+  });
+
+  it('No sobrescribe si el mes de destino ya tenía un valor antes de migrar', () => {
+    const state = DEFAULT_STATE();
+    state.vidaLaboralPct = 100;
+    state.vidaLaboralPorMes = { '2026-7': 80 };
+    migrarVidaLaboralPorMes(state, 2026, 7);
+    expect(state.vidaLaboralPorMes['2026-7']).toBe(80);
+  });
+
+});
+
+describe('vidaLaboralDelMes', () => {
+
+  it('Devuelve null si no hay valor guardado para ese mes', () => {
+    const state = DEFAULT_STATE();
+    expect(vidaLaboralDelMes(state, 2026, 7)).toBeNull();
+  });
+
+  it('Devuelve el valor guardado de ese mes concreto', () => {
+    const state = DEFAULT_STATE();
+    state.vidaLaboralPorMes = { '2026-2': 95, '2026-7': 100 };
+    expect(vidaLaboralDelMes(state, 2026, 7)).toBe(100);
+    expect(vidaLaboralDelMes(state, 2026, 2)).toBe(95);
+  });
+
+  it('No confunde meses de años distintos', () => {
+    const state = DEFAULT_STATE();
+    state.vidaLaboralPorMes = { '2025-7': 90 };
+    expect(vidaLaboralDelMes(state, 2026, 7)).toBeNull();
+  });
+
+});
+
 describe('horasEntry', () => {
 
   it('Entrada normal usa horasServ congelado si existe', () => {
@@ -697,6 +899,128 @@ describe('compararAnios', () => {
     const r = compararAnios(state, 2025, 2023);
     expect(r.totalComparar).toBe(0);
     expect(r.diffPct).toBeNull();
+  });
+
+});
+
+describe('datosCocheAnual', () => {
+
+  it('Sin entradas, km y dinero a 0', () => {
+    const state = mkState();
+    expect(datosCocheAnual(state, 2025)).toEqual({ km: 0, dinero: 0 });
+  });
+
+  it('Suma los km de rutas "por km" y el dinero de coche (fijo y por km)', () => {
+    const state = mkState({ entries: {
+      '2025-0': [
+        { dia: 1, total: 98, km: 0, precioCoche: 18 },   // coche fijo (sin km)
+        { dia: 5, total: 91.5, km: 50, precioCoche: 11.5 }, // por km
+      ],
+    }});
+    const r = datosCocheAnual(state, 2025);
+    expect(r.km).toBe(50);
+    expect(r.dinero).toBe(29.5);
+  });
+
+  it('Ignora entradas sin coche (precioCoche 0 o ausente)', () => {
+    const state = mkState({ entries: { '2025-0': [{ dia: 1, total: 80 }] } });
+    expect(datosCocheAnual(state, 2025)).toEqual({ km: 0, dinero: 0 });
+  });
+
+  it('Suma a lo largo de todos los meses del año', () => {
+    const state = mkState({ entries: {
+      '2025-0': [{ dia: 1, km: 30, precioCoche: 6.9 }],
+      '2025-6': [{ dia: 1, km: 70, precioCoche: 16.1 }],
+    }});
+    const r = datosCocheAnual(state, 2025);
+    expect(r.km).toBe(100);
+    expect(r.dinero).toBe(23);
+  });
+
+  it('Con lugares de precio fijo que ya tienen km congelado (25/08/2026), también cuentan para el total de km sin alterar el dinero', () => {
+    const state = mkState({ entries: {
+      '2025-0': [
+        { dia: 1, total: 98, km: 25, precioCoche: 18 },     // coche fijo, con km del lugar congelado
+        { dia: 5, total: 91.5, km: 50, precioCoche: 11.5 }, // por km
+      ],
+    }});
+    const r = datosCocheAnual(state, 2025);
+    expect(r.km).toBe(75);
+    expect(r.dinero).toBe(29.5); // el dinero no cambia, sigue viniendo solo de precioCoche
+  });
+
+  it('Entradas de precio fijo SIN km propio (registradas antes de rellenar el km del lugar) cuentan igualmente, buscando el km actual del lugar', () => {
+    const state = mkState({
+      lugares: [{ id: 'olmedo', name: 'Olmedo', coche: 20, km: 32 }],
+      entries: { '2025-0': [
+        { dia: 1, total: 100, coche: 'si', lugId: 'olmedo', km: 0, precioCoche: 20 }, // entrada "antigua", sin km congelado
+      ] },
+    });
+    const r = datosCocheAnual(state, 2025);
+    expect(r.km).toBe(32);
+    expect(r.dinero).toBe(20); // el dinero sigue igual, no depende del km
+  });
+
+  it('Entrada de precio fijo cuyo lugar todavía no tiene km configurado (0) sigue sumando 0 km', () => {
+    const state = mkState({
+      lugares: [{ id: 'arzuaga', name: 'Arzuaga', coche: 18, km: 0 }],
+      entries: { '2025-0': [
+        { dia: 1, total: 98, coche: 'si', lugId: 'arzuaga', km: 0, precioCoche: 18 },
+      ] },
+    });
+    expect(datosCocheAnual(state, 2025)).toEqual({ km: 0, dinero: 18 });
+  });
+
+});
+
+describe('kmEntryCoche', () => {
+
+  it('Entrada con km propio (ruta "por km" o precio fijo ya congelado): usa ese km', () => {
+    expect(kmEntryCoche({ coche: 'km', km: 45 }, [])).toBe(45);
+    expect(kmEntryCoche({ coche: 'si', lugId: 'olmedo', km: 32 }, [{ id: 'olmedo', km: 99 }])).toBe(32);
+  });
+
+  it('Precio fijo sin km propio: busca el km actual del lugar', () => {
+    const lugares = [{ id: 'olmedo', name: 'Olmedo', coche: 20, km: 32 }];
+    expect(kmEntryCoche({ coche: 'si', lugId: 'olmedo', km: 0 }, lugares)).toBe(32);
+  });
+
+  it('Precio fijo sin km propio y lugar no encontrado (borrado): 0', () => {
+    expect(kmEntryCoche({ coche: 'si', lugId: 'no-existe', km: 0 }, [])).toBe(0);
+  });
+
+  it('Ruta "por km" sin km: 0', () => {
+    expect(kmEntryCoche({ coche: 'km' }, [])).toBe(0);
+  });
+
+});
+
+describe('datosCocheMensual', () => {
+
+  it('Sin entradas: 12 meses a 0', () => {
+    const state = mkState();
+    const r = datosCocheMensual(state, 2025);
+    expect(r.length).toBe(12);
+    expect(r.every(m => m.km === 0 && m.dinero === 0)).toBe(true);
+    expect(r[0].mes).toBe('Enero');
+  });
+
+  it('Desglosa por mes correctamente, incluyendo el fallback de km por lugar', () => {
+    const state = mkState({
+      lugares: [{ id: 'olmedo', name: 'Olmedo', coche: 20, km: 32 }],
+      entries: {
+        '2025-0': [{ dia: 1, coche: 'si', lugId: 'olmedo', km: 0, precioCoche: 20 }],
+        '2025-6': [{ dia: 1, coche: 'km', km: 70, precioCoche: 16.1 }],
+      },
+    });
+    const r = datosCocheMensual(state, 2025);
+    expect(r[0]).toEqual({ mes: 'Enero', km: 32, dinero: 20 });
+    expect(r[6]).toEqual({ mes: 'Julio', km: 70, dinero: 16.1 });
+    expect(r[1]).toEqual({ mes: 'Febrero', km: 0, dinero: 0 });
+    // El total anual debe coincidir con la suma de los meses
+    const anual = datosCocheAnual(state, 2025);
+    expect(anual.km).toBe(parseFloat(r.reduce((s, m) => s + m.km, 0).toFixed(1)));
+    expect(anual.dinero).toBe(parseFloat(r.reduce((s, m) => s + m.dinero, 0).toFixed(2)));
   });
 
 });

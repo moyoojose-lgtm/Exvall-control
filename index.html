@@ -102,6 +102,13 @@
     position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 10000;
     display: flex; align-items: center; justify-content: center; padding: 20px;
   }
+  /* El modal de confirmación (avisos, borrar, restaurar...) puede abrirse
+     ENCIMA de otro modal ya abierto (p.ej. al guardar una edición que
+     dispara un aviso, con el modal de Editar todavía abierto detrás). Sin
+     esto, al compartir el mismo z-index, el modal que esté más abajo en el
+     HTML (Editar) tapaba visualmente al de confirmación y parecía que
+     "no dejaba guardar" — el aviso estaba ahí pero invisible detrás. */
+  #confirm-modal, #info-modal { z-index: 10001; }
   .modal { background: var(--surface); border-radius: var(--radius); padding: 24px; width: 100%; max-width: 340px; }
   .modal-title { font-size: 16px; font-weight: 500; margin-bottom: 16px; }
   .modal-field { margin-bottom: 12px; }
@@ -631,7 +638,15 @@
     <div class="metrics" id="resumen-metrics"></div>
     <div class="card" id="grafico-ingresos-wrap" style="margin-bottom:16px;"></div>
     <div class="card" id="resumen-table"></div>
-    <div class="card" id="resumen-horas-tipo" style="margin-top:16px;"></div>
+    <div class="card" id="resumen-horas-coche" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+        <div class="card-title" style="margin-bottom:0;">Horas y coche</div>
+        <div id="toggle-vista-resumen" style="display:flex;gap:4px;"></div>
+      </div>
+      <div id="resumen-horas-totales" style="margin-bottom:16px;"></div>
+      <div id="resumen-horas-tipo"></div>
+      <div id="resumen-coche" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);"></div>
+    </div>
   </div>
 
   <!-- CONFIGURACIÓN -->
@@ -690,11 +705,12 @@
     </div>
 
     <div class="card">
-      <div class="card-title">Lugares <span style="font-weight:400;font-size:11px;text-transform:none;">(el precio de coche se congela al registrar)</span></div>
+      <div class="card-title">Lugares <span style="font-weight:400;font-size:11px;text-transform:none;">(precio y km de coche se congelan al registrar — km es la distancia desde Valladolid, solo informativo, no afecta al dinero)</span></div>
       <div id="lugares-list"></div>
       <div class="add-row">
         <input type="text" id="new-lug-name" placeholder="Nombre lugar" style="width:150px;">
         <input type="number" id="new-lug-coche" placeholder="Coche €" style="width:80px;">
+        <input type="number" id="new-lug-km" placeholder="Km" style="width:70px;">
         <button class="btn btn-primary btn-sm" onclick="addLugar()">Añadir</button>
       </div>
     </div>
@@ -774,22 +790,26 @@ const DEFAULT_STATE = () => ({
     {id:'especial',name:'Especial',precio:0,horas:4}
   ],
   lugares: [
-    {id:'arzuaga',name:'Arzuaga',coche:18},
-    {id:'olmedo',name:'Olmedo',coche:20},
-    {id:'valbuena',name:'Valbuena',coche:20},
-    {id:'concejo',name:'Concejo',coche:13},
-    {id:'montico',name:'Montico',coche:7},
-    {id:'afpesquera',name:'AF Pesquera',coche:22},
-    {id:'medinarioseco',name:'Medina Rioseco',coche:20},
-    {id:'otro',name:'Otro / Especial',coche:0}
+    {id:'arzuaga',name:'Arzuaga',coche:18,km:0},
+    {id:'olmedo',name:'Olmedo',coche:20,km:0},
+    {id:'valbuena',name:'Valbuena',coche:20,km:0},
+    {id:'concejo',name:'Concejo',coche:13,km:0},
+    {id:'montico',name:'Montico',coche:7,km:0},
+    {id:'afpesquera',name:'AF Pesquera',coche:22,km:0},
+    {id:'medinarioseco',name:'Medina Rioseco',coche:20,km:0},
+    {id:'otro',name:'Otro / Especial',coche:0,km:0}
   ],
   extras: {hext:12, hnoc:15, km:0.23},
   objetivo: 0,
   entries: {},
   banco: {},
   nombre: '',
-  vidaLaboralPct: null,
-  ultimaSincronizacionNube: null
+  vidaLaboralPct: null, // OBSOLETO (25/08/2026): sustituido por vidaLaboralPorMes, se mantiene solo para migrar perfiles antiguos
+  vidaLaboralPorMes: {}, // "AAAA-M" (M base 0) -> % de jornada (CTP) de ese mes, introducido a mano
+  ultimaSincronizacionNube: null,
+  _kmSembrado: false,
+  _kmSembradoV2: false,
+  _vidaLaboralMigrado: false
 });
 
 let state = DEFAULT_STATE();
@@ -825,6 +845,100 @@ function migrarHorasServicios() {
   (state.servicios || []).forEach(s => {
     if (s.horas == null) s.horas = HORAS_POR_DEFECTO[s.id] != null ? HORAS_POR_DEFECTO[s.id] : 4;
   });
+}
+
+// Migración: añade "km" a lugares guardados antes de esta mejora (25/08/2026),
+// para que el resumen de coche pueda sumar los km de los trayectos a precio
+// fijo (no solo los de "ruta por km"). Por defecto 0 — se rellena a mano en
+// Configuración, ya que la distancia real desde Valladolid a cada lugar no
+// se puede adivinar.
+function migrarKmLugares() {
+  (state.lugares || []).forEach(l => {
+    if (l.km == null) l.km = 0;
+  });
+}
+
+// Km POR CARRETERA, SOLO IDA, consultados el 25/08/2026 (primer intento,
+// antes de que el usuario confirmara los reales de ida y vuelta). Se
+// mantienen solo para poder detectar y corregir automáticamente perfiles
+// que se sembraron con estos valores equivocados (ver resembrarKmV2) — no
+// se usan para sembrar nada nuevo.
+const KM_POR_DEFECTO_LUGAR_V1 = {
+  arzuaga: 35,
+  olmedo: 43,
+  valbuena: 41,
+  afpesquera: 51,
+  medinarioseco: 41,
+};
+
+// Km de IDA Y VUELTA desde Valladolid hasta los lugares que vienen por
+// defecto en la app, confirmados por el usuario el 25/08/2026 (sustituyen a
+// los de KM_POR_DEFECTO_LUGAR_V1, que eran solo de ida y además no incluían
+// "concejo" ni "montico").
+const KM_POR_DEFECTO_LUGAR = {
+  arzuaga: 80,
+  olmedo: 81,
+  valbuena: 96,
+  concejo: 70,
+  montico: 44.5,
+  afpesquera: 116,
+  medinarioseco: 86,
+};
+
+// Rellena, UNA SOLA VEZ por perfil, el km de los lugares por defecto que se
+// pudieron identificar con datos públicos, para no dejar a los perfiles ya
+// creados con todo a 0 para siempre. Se marca con state._kmSembrado para no
+// volver a pisar valores que el usuario cambie él mismo más adelante
+// (incluido dejarlos a 0 a propósito). No toca el dinero en ningún caso.
+function sembrarKmConocidos() {
+  if (state._kmSembrado) return;
+  (state.lugares || []).forEach(l => {
+    if ((l.km == null || l.km === 0) && KM_POR_DEFECTO_LUGAR[l.id] != null) {
+      l.km = KM_POR_DEFECTO_LUGAR[l.id];
+    }
+  });
+  state._kmSembrado = true;
+}
+
+// Corrige, UNA SOLA VEZ por perfil, los km sembrados automáticamente por
+// sembrarKmConocidos con los valores equivocados de la primera versión
+// (25/08/2026: eran solo de ida, y no incluían "concejo" ni "montico").
+// Solo toca un lugar si su km actual coincide EXACTAMENTE con el valor
+// viejo (V1) o sigue a 0 — es decir, si el usuario nunca lo tocó a mano. Si
+// el usuario ya editó el km de un lugar a otro número cualquiera, se deja
+// tal cual, no se pisa. No toca el dinero en ningún caso.
+function resembrarKmV2() {
+  if (state._kmSembradoV2) return;
+  (state.lugares || []).forEach(l => {
+    if (KM_POR_DEFECTO_LUGAR[l.id] == null) return;
+    const esValorViejoSinTocar = l.km === KM_POR_DEFECTO_LUGAR_V1[l.id];
+    const esCero = l.km == null || l.km === 0;
+    if (esValorViejoSinTocar || esCero) {
+      l.km = KM_POR_DEFECTO_LUGAR[l.id];
+    }
+  });
+  state._kmSembradoV2 = true;
+}
+
+// Migra, UNA SOLA VEZ por perfil, el antiguo valor único de vidaLaboralPct
+// (una sola cifra para toda la app) a vidaLaboralPorMes (un valor por mes),
+// para poder comparar mes a mes sin perder el dato anterior cada vez que se
+// actualiza. El valor antiguo se asigna al mes que estuviera abierto en ese
+// momento.
+function migrarVidaLaboralPorMes() {
+  if (!state.vidaLaboralPorMes) state.vidaLaboralPorMes = {};
+  if (!state._vidaLaboralMigrado && state.vidaLaboralPct != null) {
+    const key = `${currentYear}-${state.currentMonth}`;
+    if (state.vidaLaboralPorMes[key] == null) {
+      state.vidaLaboralPorMes[key] = state.vidaLaboralPct;
+    }
+  }
+  state._vidaLaboralMigrado = true;
+}
+
+function vidaLaboralDelMes(year, month) {
+  const v = state.vidaLaboralPorMes && state.vidaLaboralPorMes[`${year}-${month}`];
+  return v == null ? null : v;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -923,7 +1037,7 @@ async function loadProfile(id) {
     state = data ? { ...DEFAULT_STATE(), ...data } : DEFAULT_STATE();
   } catch(e) { state = DEFAULT_STATE(); }
   state.currentMonth = new Date().getMonth();
-  migrarHorasServicios();
+  migrarHorasServicios(); migrarKmLugares(); sembrarKmConocidos(); resembrarKmV2(); migrarVidaLaboralPorMes();
 }
 
 async function saveProfile() {
@@ -1288,16 +1402,20 @@ function calcHorasMes(entries) {
   return { horas, pctJornada };
 }
 
-// Vida Laboral (24/08/2026): al ser trabajadores fijos, el Informe de Vida
-// Laboral no tiene información día a día que cruzar automáticamente, solo
-// un % de jornada (CTP) del periodo de alta continuo. Por eso este dato se
-// introduce a mano, para poder comparar dentro de la app con el % real
-// calculado a partir de las horas registradas.
-function updateVidaLaboralPct(v) {
+// Vida Laboral (24/08/2026, por mes desde el 25/08/2026): al ser
+// trabajadores fijos, el Informe de Vida Laboral no tiene información día a
+// día que cruzar automáticamente, solo un % de jornada (CTP) del periodo de
+// alta continuo. Por eso este dato se introduce a mano cada mes (para poder
+// mirar hacia atrás), para comparar dentro de la app con el % real
+// calculado a partir de las horas registradas de ese mes.
+function updateVidaLaboralMes(year, month, v) {
   const n = parseFloat(v);
-  state.vidaLaboralPct = (v === '' || isNaN(n)) ? null : Math.max(0, Math.min(100, n));
+  if (!state.vidaLaboralPorMes) state.vidaLaboralPorMes = {};
+  const key = `${year}-${month}`;
+  if (v === '' || isNaN(n)) delete state.vidaLaboralPorMes[key];
+  else state.vidaLaboralPorMes[key] = Math.max(0, Math.min(100, n));
   save();
-  renderEntries();
+  renderResumen();
 }
 
 function onDiaChange() {
@@ -1579,7 +1697,11 @@ function addEntry() {
 
   const serv = state.servicios.find(s => s.id === servId);
   const lug  = state.lugares.find(l => l.id === lugId);
-  const km    = coche === 'km' ? (calculatedKm || kmM) : 0;
+  // Km recorridos: en ruta "por km" son los calculados/manuales; en trayecto
+  // a precio fijo ("si") se congela el km del lugar (distancia desde
+  // Valladolid) configurado en Configuración — solo informativo, no cambia
+  // el precio, que sigue dependiendo únicamente de "coche" del lugar.
+  const km    = coche === 'km' ? (calculatedKm || kmM) : (coche === 'si' && lug ? (lug.km || 0) : 0);
   const total = calcTotal();
   const precioServ  = serv ? (serv.precio > 0 ? serv.precio : manual) : 0;
   const precioCoche = coche === 'si' && lug ? lug.coche : (coche === 'km' ? parseFloat((km * state.extras.km).toFixed(2)) : 0);
@@ -1674,8 +1796,9 @@ function renderEntries() {
   // Barra de progreso hacia objetivo (si hay datos)
   const maxPosible = 12 * Math.max(...entries.map(e => e.total), 1);
 
-  // Horas trabajadas y desglose dinero servicio / coche-gasolina (24/08/2026)
-  const { horas: horasMes, pctJornada } = calcHorasMes(entries);
+  // Desglose dinero servicio / coche-gasolina (24/08/2026). Las horas
+  // trabajadas y la comparación con Vida Laboral se movieron a Resumen
+  // (25/08/2026), dentro de la tarjeta "Horas y coche".
   const dineroCoche = entries.reduce((s, e) => s + (e.precioCoche || 0), 0);
   const dineroServicio = totalMes - dineroCoche;
   const numServicios = entries.reduce((s, e) => s + (e.stops && e.stops.length > 0 ? e.stops.length : 1), 0);
@@ -1688,23 +1811,6 @@ function renderEntries() {
       <button class="btn btn-secondary btn-sm" onclick="exportMesExcel()" title="Exportar mes a Excel">XLS</button>
       <button class="btn btn-secondary btn-sm" onclick="exportMesPDF()" title="Exportar mes a PDF">PDF</button>
     </div>
-  </div>
-  <div class="card" style="margin-bottom:12px;">
-    <div class="card-title">Horas trabajadas este mes</div>
-    <div style="display:flex;flex-wrap:wrap;gap:18px;font-size:13px;">
-      <div><span style="color:var(--text3);">Horas totales:</span> <strong>${horasMes.toFixed(1).replace('.',',')} h</strong></div>
-      <div><span style="color:var(--text3);">% de jornada completa (convenio, ${JORNADA_ANUAL_CONVENIO}h/año):</span> <strong>${pctJornada.toFixed(1).replace('.',',')} %</strong></div>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
-      <span style="font-size:12px;color:var(--text3);">% jornada (CTP) según tu Vida Laboral:</span>
-      <button type="button" class="help-icon" onclick="showInfo('% de Vida Laboral', 'Es el % de jornada (CTP) que aparece en tu Informe de Vida Laboral de la Seguridad Social, junto al periodo de alta de la empresa. Introdúcelo aquí a mano y la app te muestra directamente la diferencia frente al % que calcula a partir de tus horas realmente registradas este mes.')" title="Ayuda con % de Vida Laboral">❓</button>
-      <input type="number" id="vida-laboral-pct" min="0" max="100" step="0.1" placeholder="ej: 100"
-        value="${state.vidaLaboralPct != null ? state.vidaLaboralPct : ''}"
-        style="width:80px;" onchange="updateVidaLaboralPct(this.value)">
-      <span style="font-size:12px;color:var(--text3);">%</span>
-      ${state.vidaLaboralPct != null ? `<span style="font-size:12px;color:var(--text2);">— diferencia: <strong>${(pctJornada - state.vidaLaboralPct).toFixed(1).replace('.',',')} pts</strong></span>` : ''}
-    </div>
-    <p style="font-size:11px;color:var(--text3);margin-top:6px;margin-bottom:0;">Introduce a mano el % de jornada (CTP) que figura en tu Informe de Vida Laboral de la Seguridad Social, para comparar directamente aquí con las horas reales de este mes.</p>
   </div>
   <div class="card" style="margin-bottom:12px;">
     <div class="card-title">Dinero de este mes — desglosado</div>
@@ -1969,20 +2075,117 @@ function renderResumen() {
     </table></div>`;
 
   renderGraficoIngresos();
+  renderToggleVistaResumen();
+  renderHorasTotalesResumen();
   renderHistoricoHorasTipo();
+  renderResumenCoche();
+}
+
+// Selector Mes/Año compartido entre "Horas por tipo de servicio" y "Coche"
+// (25/08/2026, a petición del usuario: "sería bueno separar por mes y al
+// año todos los datos"). 'total' muestra el año completo (comportamiento de
+// siempre); 'mes' restringe ambas tablas solo al mes actualmente
+// seleccionado en Registrar/Resumen, para verlo de un vistazo sin tener que
+// mirar la tabla mensual entera.
+let _vistaResumenHorasCoche = 'total'; // 'mes' | 'total'
+// Mes elegido dentro de la vista "Mes" — independiente del mes abierto en
+// Registrar, para poder mirar aquí cualquier mes (enero, agosto, el que
+// sea) sin tener que cambiar de mes en el resto de la app.
+let _mesResumenHorasCoche = null;
+
+function setVistaResumenHorasCoche(v) {
+  _vistaResumenHorasCoche = v;
+  if (v === 'mes' && _mesResumenHorasCoche == null) _mesResumenHorasCoche = state.currentMonth;
+  renderToggleVistaResumen();
+  renderHorasTotalesResumen();
+  renderHistoricoHorasTipo();
+  renderResumenCoche();
+}
+
+function setMesResumenHorasCoche(i) {
+  _mesResumenHorasCoche = parseInt(i, 10);
+  renderHorasTotalesResumen();
+  renderHistoricoHorasTipo();
+  renderResumenCoche();
+}
+
+function renderToggleVistaResumen() {
+  const cont = document.getElementById('toggle-vista-resumen');
+  if (!cont) return;
+  const btn = (v, label) => `<button type="button" class="btn btn-sm ${_vistaResumenHorasCoche === v ? 'btn-primary' : 'btn-secondary'}" onclick="setVistaResumenHorasCoche('${v}')">${label}</button>`;
+  const mesSel = _vistaResumenHorasCoche === 'mes'
+    ? `<select onchange="setMesResumenHorasCoche(this.value)" style="font-size:12px;padding:4px 6px;">
+        ${MONTHS.map((m, i) => `<option value="${i}" ${i === (_mesResumenHorasCoche ?? state.currentMonth) ? 'selected' : ''}>${m}</option>`).join('')}
+      </select>`
+    : '';
+  cont.innerHTML = mesSel + btn('mes', 'Mes') + btn('total', 'Año');
+}
+
+// Horas trabajadas + comparación con Vida Laboral (movido de Registrar a
+// Resumen el 25/08/2026, a petición del usuario, para poder rellenarlo al
+// cerrar el mes — p.ej. sobre el día 10 del mes siguiente — y comprobar si
+// coincide con las horas calculadas). En vista "Mes" se guarda un valor de
+// Vida Laboral por cada mes (no se pierde el de meses anteriores); en vista
+// "Año" solo se muestra el total de horas del año, sin comparación (el
+// Informe de Vida Laboral es un dato mensual).
+function renderHorasTotalesResumen() {
+  const cont = document.getElementById('resumen-horas-totales');
+  if (!cont) return;
+  const esMes = _vistaResumenHorasCoche === 'mes';
+  const mesElegido = _mesResumenHorasCoche ?? state.currentMonth;
+
+  if (esMes) {
+    const entries = state.entries[`${currentYear}-${mesElegido}`] || [];
+    const { horas, pctJornada } = calcHorasMes(entries);
+    const vl = vidaLaboralDelMes(currentYear, mesElegido);
+    cont.innerHTML = `<div class="card-title" style="font-size:13px;">Horas trabajadas (${MONTHS[mesElegido]} ${currentYear})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:18px;font-size:13px;">
+        <div><span style="color:var(--text3);">Horas totales:</span> <strong>${horas.toFixed(1).replace('.',',')} h</strong></div>
+        <div><span style="color:var(--text3);">% de jornada completa (convenio, ${JORNADA_ANUAL_CONVENIO}h/año):</span> <strong>${pctJornada.toFixed(1).replace('.',',')} %</strong></div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+        <span style="font-size:12px;color:var(--text3);">% jornada (CTP) según tu Vida Laboral de ${MONTHS[mesElegido]}:</span>
+        <button type="button" class="help-icon" onclick="showInfo('% de Vida Laboral', 'Es el % de jornada (CTP) que aparece en tu Informe de Vida Laboral de la Seguridad Social, junto al periodo de alta de la empresa. Introdúcelo aquí a mano, mes a mes (por ejemplo sobre el día 10 del mes siguiente, cuando puedas comprobarlo), y la app te muestra la diferencia frente al % que calcula a partir de tus horas realmente registradas ese mes. Se guarda un valor por cada mes, así no se pierde el de meses anteriores.')" title="Ayuda con % de Vida Laboral">❓</button>
+        <input type="number" min="0" max="100" step="0.1" placeholder="ej: 100"
+          value="${vl != null ? vl : ''}"
+          style="width:80px;" onchange="updateVidaLaboralMes(${currentYear}, ${mesElegido}, this.value)">
+        <span style="font-size:12px;color:var(--text3);">%</span>
+        ${vl != null ? `<span style="font-size:12px;color:var(--text2);">— diferencia: <strong>${(pctJornada - vl).toFixed(1).replace('.',',')} pts</strong></span>` : ''}
+      </div>
+      <p style="font-size:11px;color:var(--text3);margin-top:6px;margin-bottom:0;">Introduce a mano el % de jornada (CTP) que figura en tu Informe de Vida Laboral de la Seguridad Social para ${MONTHS[mesElegido]}, para comparar aquí con las horas reales de ese mes — se guarda por mes, así puedes ir comprobándolo cada vez que cierres uno (p.ej. sobre el día 10 del mes siguiente).</p>`;
+  } else {
+    let horasAnual = 0;
+    MONTHS.forEach((m, i) => {
+      const entries = state.entries[`${currentYear}-${i}`] || [];
+      horasAnual += calcHorasMes(entries).horas;
+    });
+    const pctAnual = JORNADA_ANUAL_CONVENIO > 0 ? (horasAnual / JORNADA_ANUAL_CONVENIO * 100) : 0;
+    cont.innerHTML = `<div class="card-title" style="font-size:13px;">Horas trabajadas (${currentYear})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:18px;font-size:13px;">
+        <div><span style="color:var(--text3);">Horas totales:</span> <strong>${horasAnual.toFixed(1).replace('.',',')} h</strong></div>
+        <div><span style="color:var(--text3);">% de jornada completa del año (convenio, ${JORNADA_ANUAL_CONVENIO}h/año):</span> <strong>${pctAnual.toFixed(1).replace('.',',')} %</strong></div>
+      </div>
+      <p style="font-size:11px;color:var(--text3);margin-top:6px;margin-bottom:0;">Para comparar con tu Informe de Vida Laboral mes a mes, cambia a la vista "Mes" de arriba.</p>`;
+  }
 }
 
 // Histórico de horas por tipo de servicio, a lo largo de todo el año
-// seleccionado — para ver de un vistazo qué tipo de evento compensa peor en
-// horas extra/nocturnas frente a lo que paga, útil como argumento si se
-// negocia el precio con la empresa.
+// seleccionado (o solo el mes actual, según el selector Mes/Año) — para ver
+// de un vistazo qué tipo de evento compensa peor en horas extra/nocturnas
+// frente a lo que paga, útil como argumento si se negocia el precio con la
+// empresa.
 function renderHistoricoHorasTipo() {
   const cont = document.getElementById('resumen-horas-tipo');
   if (!cont) return;
 
+  const esMes = _vistaResumenHorasCoche === 'mes';
+  const mesElegido = _mesResumenHorasCoche ?? state.currentMonth;
+  const mesesAIncluir = esMes ? [mesElegido] : MONTHS.map((m, i) => i);
+  const tituloPeriodo = esMes ? `${MONTHS[mesElegido]} ${currentYear}` : `${currentYear}`;
+
   // Acumular por servicio: nº de veces, horas totales, dinero total
   const acumulado = {}; // servId -> {nombre, veces, horas, dinero}
-  MONTHS.forEach((m, i) => {
+  mesesAIncluir.forEach(i => {
     const key = `${currentYear}-${i}`;
     const entries = state.entries[key] || [];
     entries.forEach(e => {
@@ -2020,8 +2223,8 @@ function renderHistoricoHorasTipo() {
 
   const filas = Object.values(acumulado).sort((a, b) => b.horas - a.horas);
   if (filas.length === 0) {
-    cont.innerHTML = `<div class="card-title">Histórico de horas por tipo de servicio (${currentYear})</div>
-      <p style="font-size:13px;color:var(--text3);">Sin entradas todavía en ${currentYear}.</p>`;
+    cont.innerHTML = `<div class="card-title" style="font-size:13px;">Horas por tipo de servicio (${tituloPeriodo})</div>
+      <p style="font-size:13px;color:var(--text3);">Sin entradas todavía en ${tituloPeriodo}.</p>`;
     return;
   }
 
@@ -2036,7 +2239,7 @@ function renderHistoricoHorasTipo() {
     </tr>`;
   }).join('');
 
-  cont.innerHTML = `<div class="card-title">Histórico de horas por tipo de servicio (${currentYear})</div>
+  cont.innerHTML = `<div class="card-title" style="font-size:13px;">Horas por tipo de servicio (${tituloPeriodo})</div>
     <p style="font-size:11px;color:var(--text3);margin-bottom:10px;">Incluye horas del servicio + horas extra + horas nocturnas de cada entrada. El €/hora es orientativo (dinero total del tipo ÷ horas totales del tipo).</p>
     <div style="overflow-x:auto;"><table>
       <thead><tr>
@@ -2048,6 +2251,78 @@ function renderHistoricoHorasTipo() {
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table></div>`;
+}
+
+// ── Coche: km y dinero generado en el año (25/08/2026) ───────────────────────
+function kmEntryCoche(e) {
+  // Entradas de precio fijo sin km propio (registradas antes de esta mejora
+  // del 25/08/2026, o antes de rellenar el km del lugar en Configuración):
+  // en vez de contar 0 para siempre, se busca el km configurado ahora mismo
+  // para ese lugar. Así, en cuanto se rellena el km de un lugar en
+  // Configuración, todas sus entradas (pasadas y futuras) cuentan
+  // correctamente — sin tocar el dinero, que sigue viniendo solo de precioCoche.
+  if (e.coche === 'si' && !e.km) {
+    const lug = state.lugares.find(l => l.id === e.lugId);
+    return (lug && lug.km) || 0;
+  }
+  return e.km || 0;
+}
+
+function datosCocheAnual(year) {
+  let km = 0, dinero = 0;
+  MONTHS.forEach((m, i) => {
+    const key = `${year}-${i}`;
+    const entries = state.entries[key] || [];
+    entries.forEach(e => {
+      km += kmEntryCoche(e);
+      dinero += e.precioCoche || 0;
+    });
+  });
+  return { km: parseFloat(km.toFixed(1)), dinero: parseFloat(dinero.toFixed(2)) };
+}
+
+function datosCocheMensual(year) {
+  return MONTHS.map((m, i) => {
+    const key = `${year}-${i}`;
+    const entries = state.entries[key] || [];
+    let km = 0, dinero = 0;
+    entries.forEach(e => {
+      km += kmEntryCoche(e);
+      dinero += e.precioCoche || 0;
+    });
+    return { mes: m, km: parseFloat(km.toFixed(1)), dinero: parseFloat(dinero.toFixed(2)) };
+  });
+}
+function renderResumenCoche() {
+  const cont = document.getElementById('resumen-coche');
+  if (!cont) return;
+  const esMes = _vistaResumenHorasCoche === 'mes';
+  const mesElegido = _mesResumenHorasCoche ?? state.currentMonth;
+  const mensualCompleto = datosCocheMensual(currentYear);
+  const { km, dinero } = esMes ? mensualCompleto[mesElegido] : datosCocheAnual(currentYear);
+  const eurKm = km > 0 ? (dinero / km) : 0;
+  const tituloPeriodo = esMes ? `${MONTHS[mesElegido]} ${currentYear}` : `${currentYear}`;
+  const mensual = mensualCompleto.filter(m => m.km > 0 || m.dinero > 0);
+  const filasMensual = mensual.map(m => `
+    <tr>
+      <td>${m.mes}</td>
+      <td style="text-align:right;">${m.km.toFixed(1).replace('.',',')} km</td>
+      <td style="text-align:right;">${m.dinero.toFixed(2).replace('.',',')} €</td>
+    </tr>`).join('');
+  cont.innerHTML = `<div class="card-title" style="font-size:13px;">Coche (${tituloPeriodo})</div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:10px;">Suma de los km recorridos en rutas "por km" y el dinero generado por coche/gasolina, tanto en precio fijo por lugar como por km.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:18px;font-size:13px;">
+      <div><span style="color:var(--text3);">Km recorridos:</span> <strong>${km.toFixed(1).replace('.',',')} km</strong></div>
+      <div><span style="color:var(--text3);">Dinero generado por coche:</span> <strong>${dinero.toFixed(2).replace('.',',')} €</strong></div>
+      ${km > 0 ? `<div><span style="color:var(--text3);">Media:</span> <strong>${eurKm.toFixed(2).replace('.',',')} €/km</strong></div>` : ''}
+    </div>
+    ${!esMes && mensual.length > 0 ? `
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);overflow-x:auto;">
+      <table style="width:100%;font-size:12px;">
+        <thead><tr><th style="text-align:left;">Mes</th><th style="text-align:right;">Km</th><th style="text-align:right;">Dinero coche</th></tr></thead>
+        <tbody>${filasMensual}</tbody>
+      </table>
+    </div>` : ''}`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2092,6 +2367,7 @@ function renderConfig() {
       <span>${escHtml(l.name)}</span>
       <span class="tag">coche ${l.coche} €</span>
       <input type="number" value="${l.coche}" min="0" step="1" onchange="updateLugCoche(${i},this.value)" title="Cambiar precio coche">
+      <input type="number" value="${l.km != null ? l.km : 0}" min="0" step="1" style="width:60px;" onchange="updateLugKm(${i},this.value)" title="Km desde Valladolid (solo informativo, no cambia el precio)">
       ${i >= 8 ? `<button class="del-circle" onclick="delLugar(${i})">×</button>` : '<span style="width:22px;"></span>'}
     </div>`).join('');
 
@@ -2101,6 +2377,7 @@ function renderConfig() {
 function updateServPrecio(i, v) { state.servicios[i].precio = parseFloat(v) || 0; save(); renderConfig(); populateDropdowns(); }
 function updateServHoras(i, v)  { state.servicios[i].horas  = parseFloat(v) || 0; save(); renderConfig(); populateDropdowns(); }
 function updateLugCoche(i, v)   { state.lugares[i].coche   = parseFloat(v) || 0; save(); renderConfig(); populateDropdowns(); }
+function updateLugKm(i, v)      { state.lugares[i].km      = parseFloat(v) || 0; save(); renderConfig(); populateDropdowns(); }
 
 function addServicio() {
   const name   = document.getElementById('new-serv-name').value.trim();
@@ -2119,11 +2396,14 @@ function addServicio() {
 function addLugar() {
   const name  = document.getElementById('new-lug-name').value.trim();
   const coche = parseFloat(document.getElementById('new-lug-coche').value) || 0;
+  const kmEl  = document.getElementById('new-lug-km');
+  const km    = kmEl ? (parseFloat(kmEl.value) || 0) : 0;
   if (!name) return;
-  state.lugares.push({id: crypto.randomUUID(), name, coche});
+  state.lugares.push({id: crypto.randomUUID(), name, coche, km});
   save(); renderConfig(); populateDropdowns();
   document.getElementById('new-lug-name').value = '';
   document.getElementById('new-lug-coche').value = '';
+  if (kmEl) kmEl.value = '';
   showToast('Lugar añadido', 'ok');
 }
 
@@ -2286,7 +2566,8 @@ function importBackup(event) {
       if (imported.lugares)   state.lugares   = imported.lugares;
       if (imported.extras)    state.extras    = imported.extras;
       if (imported.vidaLaboralPct !== undefined) state.vidaLaboralPct = imported.vidaLaboralPct;
-      migrarHorasServicios();
+      if (imported.vidaLaboralPorMes) state.vidaLaboralPorMes = imported.vidaLaboralPorMes;
+      migrarHorasServicios(); migrarKmLugares(); sembrarKmConocidos(); resembrarKmV2(); migrarVidaLaboralPorMes();
       save();
       renderMonths(); renderEntries(); populateDropdowns();
       document.getElementById('irpf-input').value = state.irpf;
@@ -2667,6 +2948,10 @@ function saveEditEntry() {
   const lug  = state.lugares.find(l  => l.id === lugId);
   const total = calcEditTotal();
   const precioCoche = coche === 'si' && lug ? lug.coche : (coche === 'km' ? parseFloat((km * state.extras.km).toFixed(2)) : 0);
+  // Km recorridos (igual criterio que al registrar): en "por km" son los
+  // introducidos; en precio fijo ("si") se congela el km del lugar
+  // configurado — solo informativo, no afecta a precioCoche/total.
+  const kmFinal = coche === 'km' ? km : (coche === 'si' && lug ? (lug.km || 0) : 0);
 
   // Rastro de auditoría: antes de sobrescribir, guardamos en el historial
   // cómo estaba la entrada antes de esta edición (no se pierde el dato anterior).
@@ -2688,7 +2973,7 @@ function saveEditEntry() {
     hnoc,
     manual,
     especDesc,
-    km: coche === 'km' ? km : 0,
+    km: kmFinal,
     total,
     irpf: state.irpf,
     precioServ: serv ? (serv.precio > 0 ? serv.precio : manual) : 0,
@@ -2916,7 +3201,8 @@ async function nubeAutoRestaurarSiHayMasNuevo() {
     if (importado.extras)    state.extras    = importado.extras;
     if (importado.objetivo !== undefined) state.objetivo = importado.objetivo;
     if (importado.vidaLaboralPct !== undefined) state.vidaLaboralPct = importado.vidaLaboralPct;
-    migrarHorasServicios();
+    if (importado.vidaLaboralPorMes) state.vidaLaboralPorMes = importado.vidaLaboralPorMes;
+    migrarHorasServicios(); migrarKmLugares(); sembrarKmConocidos(); resembrarKmV2(); migrarVidaLaboralPorMes();
     state.ultimaSincronizacionNube = new Date().toISOString();
     await dbPut('profileData', state, activeProfileId);
 
@@ -3034,7 +3320,8 @@ async function nubeRestaurar() {
         if (importado.extras)    state.extras    = importado.extras;
         if (importado.objetivo !== undefined) state.objetivo = importado.objetivo;
         if (importado.vidaLaboralPct !== undefined) state.vidaLaboralPct = importado.vidaLaboralPct;
-        migrarHorasServicios();
+        if (importado.vidaLaboralPorMes) state.vidaLaboralPorMes = importado.vidaLaboralPorMes;
+        migrarHorasServicios(); migrarKmLugares(); sembrarKmConocidos(); resembrarKmV2(); migrarVidaLaboralPorMes();
         state.ultimaSincronizacionNube = new Date().toISOString();
         await saveProfile();
         renderMonths(); renderEntries(); populateDropdowns();

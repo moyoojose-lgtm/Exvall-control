@@ -3,7 +3,7 @@
 // en cada push a main (ver .github/workflows/tests.yml, job "version-sw").
 // No hace falta cambiarlo a mano nunca — si lo editas manualmente aquí, el
 // siguiente push lo volverá a sobrescribir con el hash calculado automáticamente.
-const CACHE_NAME = 'exvall-sary-4a502c7bbc';
+const CACHE_NAME = 'exvall-sary-5d162e6b8d';
 
 // Recursos a cachear para uso offline
 const ASSETS = [

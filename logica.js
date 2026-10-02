@@ -32,6 +32,9 @@ export const DEFAULT_STATE = () => ({
     {id:'montico',      name:'Montico',           coche:7 , km:0},
     {id:'afpesquera',   name:'AF Pesquera',       coche:22, km:0},
     {id:'medinarioseco',name:'Medina Rioseco',     coche:20, km:0},
+    {id:'dehesacanonigos',name:'Bodega Dehesa de los Canónigos', coche:23, km:100, preciosServicio:{boda:85}},
+    {id:'gaonera',      name:'Gaonera',           coche:0 , km:0, preciosServicio:{boda:85}},
+    {id:'valladolid',   name:'Valladolid',        coche:0 , km:0, preciosServicio:{comidas:60}},
     {id:'otro',         name:'Otro / Especial',    coche:0 , km:0},
   ],
   extras: { hext: 12, hnoc: 15, km: 0.23 },
@@ -44,8 +47,78 @@ export const DEFAULT_STATE = () => ({
   ultimaSincronizacionNube: null, // ISO timestamp de la última subida/bajada automática a la nube
   _kmSembrado: false, // true tras rellenar una vez el km de los lugares por defecto conocidos (25/08/2026)
   _kmSembradoV2: false, // true tras corregir (una vez) los km sembrados con los valores equivocados de la primera version, por los reales de ida y vuelta (25/08/2026)
+  _lugaresNuevosV1: false, // true tras añadir (una vez) los lugares nuevos introducidos el 10/09/2026 a perfiles ya existentes
+  _lugaresNuevosV2: false, // true tras añadir (una vez) Gaonera y Valladolid, introducidos el 10/09/2026, a perfiles ya existentes
   _vidaLaboralMigrado: false, // true tras migrar (una vez) el valor único antiguo de vidaLaboralPct a vidaLaboralPorMes (25/08/2026)
 });
+
+// Lugares nuevos que se añaden por defecto a partir del 10/09/2026, para que
+// aparezcan solos en los perfiles YA EXISTENTES (los perfiles nuevos ya los
+// traen desde DEFAULT_STATE). Se añade UNA SOLA VEZ por perfil, guardado con
+// state._lugaresNuevosV1 — si el usuario lo borra luego a mano, no se vuelve
+// a añadir solo.
+export const LUGARES_NUEVOS_V1 = [
+  {id:'dehesacanonigos',name:'Bodega Dehesa de los Canónigos',coche:23,km:100,preciosServicio:{boda:85}},
+];
+
+export function añadirLugaresNuevosV1(state) {
+  if (state._lugaresNuevosV1) return state;
+  if (!state.lugares) state.lugares = [];
+  LUGARES_NUEVOS_V1.forEach(nuevo => {
+    if (!state.lugares.some(l => l.id === nuevo.id)) {
+      state.lugares.push({...nuevo});
+    }
+  });
+  state._lugaresNuevosV1 = true;
+  return state;
+}
+
+// Segunda tanda de lugares nuevos (10/09/2026): Gaonera (Boda a 85€, sin km
+// fijo — el coche de cada boda ahí se registra "por km" a mano, ruta a ruta,
+// porque no hay un trayecto fijo) y Valladolid (Comidas a 60€, con la
+// excepción del restaurante "Trasto" — ver precioServicioEnLugar). Mismo
+// patrón de migración de una sola vez que LUGARES_NUEVOS_V1, con su propio
+// flag para no depender de que _lugaresNuevosV1 ya se hubiera ejecutado.
+export const LUGARES_NUEVOS_V2 = [
+  {id:'gaonera',    name:'Gaonera',    coche:0, km:0, preciosServicio:{boda:85}},
+  {id:'valladolid', name:'Valladolid', coche:0, km:0, preciosServicio:{comidas:60}},
+];
+
+export function añadirLugaresNuevosV2(state) {
+  if (state._lugaresNuevosV2) return state;
+  if (!state.lugares) state.lugares = [];
+  LUGARES_NUEVOS_V2.forEach(nuevo => {
+    if (!state.lugares.some(l => l.id === nuevo.id)) {
+      state.lugares.push({...nuevo});
+    }
+  });
+  state._lugaresNuevosV2 = true;
+  return state;
+}
+
+/**
+ * Devuelve el precio de un servicio en un lugar concreto, aplicando el
+ * precio especial de ese lugar (l.preciosServicio) si existe en vez del
+ * precio general del servicio.
+ *
+ * Excepción concreta pedida por el usuario (10/09/2026): en Valladolid, las
+ * Comidas cuestan 60€ salvo que sean en el restaurante "Trasto", en cuyo
+ * caso se cobra el precio normal (65€), igual que fuera de Valladolid.
+ *
+ * @param {object|null} serv        - servicio ({id, precio, ...})
+ * @param {object|null} lug         - lugar ({id, preciosServicio?, ...})
+ * @param {string}      [restaurante] - nombre del restaurante (solo relevante para Valladolid + Comidas)
+ */
+export function precioServicioEnLugar(serv, lug, restaurante) {
+  if (!serv) return 0;
+  if (lug && lug.preciosServicio && lug.preciosServicio[serv.id] != null) {
+    const esExcepcionTrasto = lug.id === 'valladolid' && serv.id === 'comidas' &&
+      (restaurante || '').trim().toLowerCase() === 'trasto';
+    if (esExcepcionTrasto) return serv.precio;
+    return lug.preciosServicio[serv.id];
+  }
+  return serv.precio;
+}
 
 // ── Cálculo de totales ────────────────────────────────────────────────────────
 
@@ -196,6 +269,8 @@ export function aplicarBackup(estadoActual, importado) {
     ultimaSincronizacionNube: importado.ultimaSincronizacionNube !== undefined ? importado.ultimaSincronizacionNube : (estadoActual.ultimaSincronizacionNube ?? null),
     _kmSembrado: importado._kmSembrado !== undefined ? importado._kmSembrado : (estadoActual._kmSembrado ?? false),
     _kmSembradoV2: importado._kmSembradoV2 !== undefined ? importado._kmSembradoV2 : (estadoActual._kmSembradoV2 ?? false),
+    _lugaresNuevosV1: importado._lugaresNuevosV1 !== undefined ? importado._lugaresNuevosV1 : (estadoActual._lugaresNuevosV1 ?? false),
+    _lugaresNuevosV2: importado._lugaresNuevosV2 !== undefined ? importado._lugaresNuevosV2 : (estadoActual._lugaresNuevosV2 ?? false),
     _vidaLaboralMigrado: importado._vidaLaboralMigrado !== undefined ? importado._vidaLaboralMigrado : (estadoActual._vidaLaboralMigrado ?? false),
   };
 }

@@ -419,6 +419,10 @@
       <label>Lugar</label>
       <select id="edit-lugar" onchange="onEditLugarChange()"></select>
     </div>
+    <div class="modal-field" id="edit-restaurante-wrap" style="display:none;">
+      <label>Restaurante</label>
+      <input type="text" id="edit-restaurante" placeholder="Nombre del restaurante" oninput="calcEditTotal()">
+    </div>
     <div class="modal-field">
       <label>Coche</label>
       <select id="edit-coche" onchange="onEditCocheChange()">
@@ -565,6 +569,10 @@
         <div class="field" id="f-especial-horas-wrap" style="display:none;">
           <label>Horas (Especial) <button type="button" class="help-icon" onclick="showInfo('Horas (Especial)', 'Como el precio, las horas de un servicio \'Especial\' se introducen a mano en cada entrada — no usan un valor fijo de Configuración. Se \'congelan\' en la entrada al guardarla, así que un cambio posterior no las altera.')" title="Ayuda con horas de Especial">❓</button></label>
           <input type="number" id="f-especial-horas" min="0" step="0.5" placeholder="0 h">
+        </div>
+        <div class="field" id="f-restaurante-wrap" style="display:none;">
+          <label>Restaurante <button type="button" class="help-icon" onclick="showInfo('Restaurante', 'Solo para anotar dónde ha sido, y porque el precio de Comidas en Valladolid depende de cuál sea: por defecto son 60€, pero en el restaurante \'Trasto\' se cobra el precio normal (65€).')" title="Ayuda con restaurante">❓</button></label>
+          <input type="text" id="f-restaurante" placeholder="Nombre del restaurante" oninput="calcTotal()">
         </div>
         <div class="field">
           <label>Nota (opcional)</label>
@@ -777,6 +785,12 @@ let routeStops = [], calculatedKm = 0;
 let currentYear = new Date().getFullYear();
 let activeProfileId = null;
 
+// Ids de los lugares que vienen de serie con la app (no se pueden borrar
+// desde el botón de la lista — solo los que el usuario añade él mismo). Se
+// mantiene como lista de ids, no un índice fijo, para no romperse cada vez
+// que se añade un lugar nuevo por defecto (ver LUGARES_NUEVOS_V1/V2).
+const LUGARES_ID_POR_DEFECTO = ['arzuaga','olmedo','valbuena','concejo','montico','afpesquera','medinarioseco','dehesacanonigos','gaonera','valladolid','otro'];
+
 // Perfil por defecto (state)
 const DEFAULT_STATE = () => ({
   irpf: 8,
@@ -797,6 +811,9 @@ const DEFAULT_STATE = () => ({
     {id:'montico',name:'Montico',coche:7,km:0},
     {id:'afpesquera',name:'AF Pesquera',coche:22,km:0},
     {id:'medinarioseco',name:'Medina Rioseco',coche:20,km:0},
+    {id:'dehesacanonigos',name:'Bodega Dehesa de los Canónigos',coche:23,km:100,preciosServicio:{boda:85}},
+    {id:'gaonera',name:'Gaonera',coche:0,km:0,preciosServicio:{boda:85}},
+    {id:'valladolid',name:'Valladolid',coche:0,km:0,preciosServicio:{comidas:60}},
     {id:'otro',name:'Otro / Especial',coche:0,km:0}
   ],
   extras: {hext:12, hnoc:15, km:0.23},
@@ -809,6 +826,8 @@ const DEFAULT_STATE = () => ({
   ultimaSincronizacionNube: null,
   _kmSembrado: false,
   _kmSembradoV2: false,
+  _lugaresNuevosV1: false,
+  _lugaresNuevosV2: false,
   _vidaLaboralMigrado: false
 });
 
@@ -918,6 +937,61 @@ function resembrarKmV2() {
     }
   });
   state._kmSembradoV2 = true;
+}
+
+// Lugares nuevos que se añaden por defecto a partir del 10/09/2026, para que
+// aparezcan solos en los perfiles YA EXISTENTES (los perfiles nuevos ya los
+// traen desde DEFAULT_STATE). Se añade UNA SOLA VEZ por perfil, guardado con
+// state._lugaresNuevosV1 — si el usuario lo borra luego a mano, no se vuelve
+// a añadir solo.
+const LUGARES_NUEVOS_V1 = [
+  {id:'dehesacanonigos',name:'Bodega Dehesa de los Canónigos',coche:23,km:100,preciosServicio:{boda:85}},
+];
+function añadirLugaresNuevosV1() {
+  if (state._lugaresNuevosV1) return;
+  if (!state.lugares) state.lugares = [];
+  LUGARES_NUEVOS_V1.forEach(nuevo => {
+    if (!state.lugares.some(l => l.id === nuevo.id)) {
+      state.lugares.push({...nuevo});
+    }
+  });
+  state._lugaresNuevosV1 = true;
+}
+
+// Segunda tanda de lugares nuevos (10/09/2026): Gaonera (Boda a 85€, sin km
+// fijo — el coche de cada boda ahí se registra "por km" a mano, ruta a ruta,
+// porque no hay un trayecto fijo) y Valladolid (Comidas a 60€, con la
+// excepción del restaurante "Trasto" — ver precioServicioEnLugar). Flag
+// propio para no depender de que _lugaresNuevosV1 ya se hubiera ejecutado.
+const LUGARES_NUEVOS_V2 = [
+  {id:'gaonera',    name:'Gaonera',    coche:0, km:0, preciosServicio:{boda:85}},
+  {id:'valladolid', name:'Valladolid', coche:0, km:0, preciosServicio:{comidas:60}},
+];
+function añadirLugaresNuevosV2() {
+  if (state._lugaresNuevosV2) return;
+  if (!state.lugares) state.lugares = [];
+  LUGARES_NUEVOS_V2.forEach(nuevo => {
+    if (!state.lugares.some(l => l.id === nuevo.id)) {
+      state.lugares.push({...nuevo});
+    }
+  });
+  state._lugaresNuevosV2 = true;
+}
+
+// Devuelve el precio de un servicio en un lugar concreto, aplicando el
+// precio especial de ese lugar (l.preciosServicio) si existe en vez del
+// precio general del servicio. Excepción concreta pedida por el usuario
+// (10/09/2026): en Valladolid, las Comidas cuestan 60€ salvo que sean en el
+// restaurante "Trasto", en cuyo caso se cobra el precio normal (65€).
+function precioServicioEnLugar(serv, lug, restaurante) {
+  if (!serv) return 0;
+  if (lug && lug.preciosServicio && lug.preciosServicio[serv.id] != null) {
+    const esExcepcionTrasto = lug.id === 'valladolid' && serv.id === 'comidas' &&
+      (restaurante || '').trim().toLowerCase() === 'trasto';
+    if (esExcepcionTrasto) return serv.precio;
+    return lug.preciosServicio[serv.id];
+  }
+  return serv.precio;
 }
 
 // Migra, UNA SOLA VEZ por perfil, el antiguo valor único de vidaLaboralPct
@@ -1037,7 +1111,7 @@ async function loadProfile(id) {
     state = data ? { ...DEFAULT_STATE(), ...data } : DEFAULT_STATE();
   } catch(e) { state = DEFAULT_STATE(); }
   state.currentMonth = new Date().getMonth();
-  migrarHorasServicios(); migrarKmLugares(); sembrarKmConocidos(); resembrarKmV2(); migrarVidaLaboralPorMes();
+  migrarHorasServicios(); migrarKmLugares(); sembrarKmConocidos(); resembrarKmV2(); añadirLugaresNuevosV1(); añadirLugaresNuevosV2(); migrarVidaLaboralPorMes();
 }
 
 async function saveProfile() {
@@ -1483,7 +1557,19 @@ function onServicioChange() {
   calcTotal();
 }
 
-function onLugarChange() { calcTotal(); }
+function onLugarChange() {
+  const lugId = document.getElementById('f-lugar').value;
+  const wrap = document.getElementById('f-restaurante-wrap');
+  if (wrap) {
+    if (lugId === 'valladolid') {
+      wrap.style.display = '';
+    } else {
+      wrap.style.display = 'none';
+      document.getElementById('f-restaurante').value = '';
+    }
+  }
+  calcTotal();
+}
 
 function onCocheChange() {
   const val = document.getElementById('f-coche').value;
@@ -1646,7 +1732,8 @@ function calcTotal() {
   if (coche === 'km') {
     routeStops.forEach(s => {
       const serv = state.servicios.find(sv => sv.id === s.servId);
-      if (serv) total += serv.precio > 0 ? serv.precio : s.especPrecio;
+      const lug  = state.lugares.find(l => l.id === s.lugId);
+      if (serv) total += serv.precio > 0 ? precioServicioEnLugar(serv, lug, s.restaurante) : s.especPrecio;
     });
     const km = calculatedKm || kmM;
     total += km * state.extras.km;
@@ -1654,9 +1741,11 @@ function calcTotal() {
     const servId = document.getElementById('f-servicio').value;
     const lugId  = document.getElementById('f-lugar').value;
     const manual = parseFloat(document.getElementById('f-manual').value) || 0;
+    const restEl = document.getElementById('f-restaurante');
+    const restaurante = restEl ? restEl.value : '';
     const serv = state.servicios.find(s => s.id === servId);
     const lug  = state.lugares.find(l => l.id === lugId);
-    if (serv) total += serv.precio > 0 ? serv.precio : manual;
+    if (serv) total += serv.precio > 0 ? precioServicioEnLugar(serv, lug, restaurante) : manual;
     if (coche === 'si' && lug) total += lug.coche;
   }
   total += hext * state.extras.hext;
@@ -1682,6 +1771,8 @@ function addEntry() {
   const especDesc = document.getElementById('f-especial-desc').value.trim();
   const kmM    = parseFloat(document.getElementById('f-km-manual').value) || 0;
   const nota   = document.getElementById('f-nota').value.trim();
+  const restEl = document.getElementById('f-restaurante');
+  const restaurante = restEl ? restEl.value.trim() : '';
 
   if (coche === 'km') {
     if (routeStops.length === 0) { showMsg('Añade al menos una parada a la ruta.', true); return; }
@@ -1703,7 +1794,7 @@ function addEntry() {
   // el precio, que sigue dependiendo únicamente de "coche" del lugar.
   const km    = coche === 'km' ? (calculatedKm || kmM) : (coche === 'si' && lug ? (lug.km || 0) : 0);
   const total = calcTotal();
-  const precioServ  = serv ? (serv.precio > 0 ? serv.precio : manual) : 0;
+  const precioServ  = serv ? (serv.precio > 0 ? precioServicioEnLugar(serv, lug, restaurante) : manual) : 0;
   const precioCoche = coche === 'si' && lug ? lug.coche : (coche === 'km' ? parseFloat((km * state.extras.km).toFixed(2)) : 0);
   // Horas del/de los servicio/s de esta entrada, congeladas al registrar
   // (igual que el precio de coche) para que un cambio posterior en la
@@ -1729,6 +1820,7 @@ function addEntry() {
     coche, hext, hnoc, manual, especDesc, km, total,
     irpf: state.irpf,
     precioServ, precioCoche, horasServ,
+    restaurante: (coche!=='km' && lugId==='valladolid') ? restaurante : '',
     stops: coche==='km' ? [...routeStops] : [],
     nota: nota || '',
     createdAt: new Date().toISOString()
@@ -1760,10 +1852,11 @@ function _addEntryReal(key, entryData) {
   save();
 
   showToast('Entrada añadida ✓', 'ok');
-  ['f-dia','f-hext','f-hnoc','f-manual','f-km-manual','f-especial-desc','f-especial-horas','f-nota'].forEach(id => document.getElementById(id).value = '');
+  ['f-dia','f-hext','f-hnoc','f-manual','f-km-manual','f-especial-desc','f-especial-horas','f-nota','f-restaurante'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-especial-desc-wrap').style.display = 'none';
   document.getElementById('f-especial-precio-wrap').style.display = 'none';
   document.getElementById('f-especial-horas-wrap').style.display = 'none';
+  document.getElementById('f-restaurante-wrap').style.display = 'none';
   routeStops = []; calculatedKm = 0;
   document.getElementById('route-info').style.display = 'none';
   document.getElementById('f-coche').value = 'no';
@@ -1851,7 +1944,8 @@ function renderEntries() {
       servLabel = serv ? (e.especDesc ? 'Espec.: ' + e.especDesc : serv.name) : '?';
       lugLabel  = lug ? lug.name : '?';
     }
-    const notaHtml = e.nota ? `<span class="entry-nota">📝 ${escHtml(e.nota)}</span>` : '';
+    const notaTexto = [e.restaurante ? `🍽️ ${e.restaurante}` : '', e.nota || ''].filter(Boolean).join(' — ');
+    const notaHtml = notaTexto ? `<span class="entry-nota">📝 ${escHtml(notaTexto)}</span>` : '';
     // Título con el rastro de auditoría (fecha de creación y nº de ediciones), visible al pasar el ratón / mantener pulsado
     let rastroTitle = e.createdAt ? `Creado: ${new Date(e.createdAt).toLocaleString('es-ES')}` : '';
     if (Array.isArray(e.historial) && e.historial.length > 0) {
@@ -2368,7 +2462,22 @@ function renderConfig() {
       <span class="tag">coche ${l.coche} €</span>
       <input type="number" value="${l.coche}" min="0" step="1" onchange="updateLugCoche(${i},this.value)" title="Cambiar precio coche">
       <input type="number" value="${l.km != null ? l.km : 0}" min="0" step="1" style="width:60px;" onchange="updateLugKm(${i},this.value)" title="Km desde Valladolid (solo informativo, no cambia el precio)">
-      ${i >= 8 ? `<button class="del-circle" onclick="delLugar(${i})">×</button>` : '<span style="width:22px;"></span>'}
+      ${!LUGARES_ID_POR_DEFECTO.includes(l.id) ? `<button class="del-circle" onclick="delLugar(${i})">×</button>` : '<span style="width:22px;"></span>'}
+    </div>
+    <div style="padding:2px 0 10px 4px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+      ${Object.entries(l.preciosServicio || {}).map(([servId, precio]) => {
+        const sv = state.servicios.find(s => s.id === servId);
+        return `<span class="tag" style="display:inline-flex;align-items:center;gap:4px;" title="Precio especial de ${escHtml(sv ? sv.name : servId)} en ${escHtml(l.name)} (en vez del precio general)">
+          ${escHtml(sv ? sv.name : servId)}: ${precio} €
+          <button class="del-circle" style="width:16px;height:16px;font-size:11px;line-height:1;" onclick="delPrecioLugar(${i},'${servId}')" title="Quitar este precio especial">×</button>
+        </span>`;
+      }).join('')}
+      <select id="new-precio-serv-${i}" style="width:120px;font-size:12px;padding:2px 4px;">
+        <option value="">+ precio especial…</option>
+        ${state.servicios.map(s => `<option value="${s.id}">${escHtml(s.name)}</option>`).join('')}
+      </select>
+      <input type="number" id="new-precio-valor-${i}" placeholder="€" style="width:60px;font-size:12px;">
+      <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:12px;" onclick="addPrecioLugar(${i})">Añadir</button>
     </div>`).join('');
 
   renderCfgProfiles();
@@ -2378,6 +2487,28 @@ function updateServPrecio(i, v) { state.servicios[i].precio = parseFloat(v) || 0
 function updateServHoras(i, v)  { state.servicios[i].horas  = parseFloat(v) || 0; save(); renderConfig(); populateDropdowns(); }
 function updateLugCoche(i, v)   { state.lugares[i].coche   = parseFloat(v) || 0; save(); renderConfig(); populateDropdowns(); }
 function updateLugKm(i, v)      { state.lugares[i].km      = parseFloat(v) || 0; save(); renderConfig(); populateDropdowns(); }
+
+// Precios especiales por lugar (10/09/2026): un lugar puede tener, para uno
+// o varios servicios, un precio distinto al general de Configuración (ej.
+// Boda a 85€ en Dehesa de los Canónigos, en vez de los 80€ de siempre). Ver
+// precioServicioEnLugar(), que es quien aplica esto al registrar/editar.
+function addPrecioLugar(i) {
+  const servSel = document.getElementById(`new-precio-serv-${i}`);
+  const valEl   = document.getElementById(`new-precio-valor-${i}`);
+  const servId  = servSel ? servSel.value : '';
+  const precio  = valEl ? parseFloat(valEl.value) : NaN;
+  if (!servId || isNaN(precio)) { showToast('Elige un servicio y un precio.', 'err'); return; }
+  if (!state.lugares[i].preciosServicio) state.lugares[i].preciosServicio = {};
+  state.lugares[i].preciosServicio[servId] = precio;
+  save(); renderConfig(); populateDropdowns();
+  showToast('Precio especial añadido', 'ok');
+}
+function delPrecioLugar(i, servId) {
+  if (state.lugares[i].preciosServicio) {
+    delete state.lugares[i].preciosServicio[servId];
+  }
+  save(); renderConfig(); populateDropdowns();
+}
 
 function addServicio() {
   const name   = document.getElementById('new-serv-name').value.trim();
@@ -2567,7 +2698,7 @@ function importBackup(event) {
       if (imported.extras)    state.extras    = imported.extras;
       if (imported.vidaLaboralPct !== undefined) state.vidaLaboralPct = imported.vidaLaboralPct;
       if (imported.vidaLaboralPorMes) state.vidaLaboralPorMes = imported.vidaLaboralPorMes;
-      migrarHorasServicios(); migrarKmLugares(); sembrarKmConocidos(); resembrarKmV2(); migrarVidaLaboralPorMes();
+      migrarHorasServicios(); migrarKmLugares(); sembrarKmConocidos(); resembrarKmV2(); añadirLugaresNuevosV1(); añadirLugaresNuevosV2(); migrarVidaLaboralPorMes();
       save();
       renderMonths(); renderEntries(); populateDropdowns();
       document.getElementById('irpf-input').value = state.irpf;
@@ -2622,6 +2753,7 @@ function buildMesRows(monthIndex) {
       'Total (€)': parseFloat(e.total.toFixed(2)),
       'IRPF (%)': (e.irpf || state.irpf) + '%',
       'Neto (€)': parseFloat((e.total * (1 - (e.irpf || state.irpf)/100)).toFixed(2)),
+      'Restaurante': e.restaurante || '',
       'Nota': e.nota || ''
     };
   });
@@ -2847,6 +2979,8 @@ function openEditModal(idx) {
 
   if (e.servId) document.getElementById('edit-servicio').value = e.servId;
   if (e.lugId)  document.getElementById('edit-lugar').value    = e.lugId;
+  document.getElementById('edit-restaurante').value = e.restaurante || '';
+  document.getElementById('edit-restaurante-wrap').style.display = e.lugId === 'valladolid' ? '' : 'none';
 
   // Especial
   const serv = state.servicios.find(s => s.id === e.servId);
@@ -2885,7 +3019,19 @@ function onEditServicioChange() {
   calcEditTotal();
 }
 
-function onEditLugarChange() { calcEditTotal(); }
+function onEditLugarChange() {
+  const lugId = document.getElementById('edit-lugar').value;
+  const wrap = document.getElementById('edit-restaurante-wrap');
+  if (wrap) {
+    if (lugId === 'valladolid') {
+      wrap.style.display = '';
+    } else {
+      wrap.style.display = 'none';
+      document.getElementById('edit-restaurante').value = '';
+    }
+  }
+  calcEditTotal();
+}
 
 function onEditCocheChange() {
   const val = document.getElementById('edit-coche').value;
@@ -2901,12 +3047,14 @@ function calcEditTotal() {
   const hnoc   = parseFloat(document.getElementById('edit-hnoc').value)  || 0;
   const manual = parseFloat(document.getElementById('edit-manual').value) || 0;
   const km     = parseFloat(document.getElementById('edit-km').value)     || 0;
+  const restEl = document.getElementById('edit-restaurante');
+  const restaurante = restEl ? restEl.value : '';
 
   const serv = state.servicios.find(s => s.id === servId);
   const lug  = state.lugares.find(l  => l.id === lugId);
 
   let total = 0;
-  if (serv) total += serv.precio > 0 ? serv.precio : manual;
+  if (serv) total += serv.precio > 0 ? precioServicioEnLugar(serv, lug, restaurante) : manual;
   if (coche === 'si' && lug) total += lug.coche;
   if (coche === 'km') total += km * state.extras.km;
   total += hext * state.extras.hext;
@@ -2932,6 +3080,8 @@ function saveEditEntry() {
   const nota    = document.getElementById('edit-nota').value.trim();
   const especDesc = document.getElementById('edit-especial-desc').value.trim();
   const especHorasEdit = parseFloat(document.getElementById('edit-especial-horas').value) || 0;
+  const restEl2 = document.getElementById('edit-restaurante');
+  const restaurante = restEl2 ? restEl2.value.trim() : '';
 
   if (!dia || !servId || !lugId) {
     showToast('Rellena día, servicio y lugar.', 'err');
@@ -2976,9 +3126,10 @@ function saveEditEntry() {
     km: kmFinal,
     total,
     irpf: state.irpf,
-    precioServ: serv ? (serv.precio > 0 ? serv.precio : manual) : 0,
+    precioServ: serv ? (serv.precio > 0 ? precioServicioEnLugar(serv, lug, restaurante) : manual) : 0,
     precioCoche,
     horasServ: serv ? (serv.precio === 0 ? especHorasEdit : (serv.horas != null ? serv.horas : 4)) : 0,
+    restaurante: lugId === 'valladolid' ? restaurante : '',
     nota,
     editedAt: new Date().toISOString(),
     historial: nuevoHistorial
@@ -3202,7 +3353,7 @@ async function nubeAutoRestaurarSiHayMasNuevo() {
     if (importado.objetivo !== undefined) state.objetivo = importado.objetivo;
     if (importado.vidaLaboralPct !== undefined) state.vidaLaboralPct = importado.vidaLaboralPct;
     if (importado.vidaLaboralPorMes) state.vidaLaboralPorMes = importado.vidaLaboralPorMes;
-    migrarHorasServicios(); migrarKmLugares(); sembrarKmConocidos(); resembrarKmV2(); migrarVidaLaboralPorMes();
+    migrarHorasServicios(); migrarKmLugares(); sembrarKmConocidos(); resembrarKmV2(); añadirLugaresNuevosV1(); añadirLugaresNuevosV2(); migrarVidaLaboralPorMes();
     state.ultimaSincronizacionNube = new Date().toISOString();
     await dbPut('profileData', state, activeProfileId);
 
@@ -3321,7 +3472,7 @@ async function nubeRestaurar() {
         if (importado.objetivo !== undefined) state.objetivo = importado.objetivo;
         if (importado.vidaLaboralPct !== undefined) state.vidaLaboralPct = importado.vidaLaboralPct;
         if (importado.vidaLaboralPorMes) state.vidaLaboralPorMes = importado.vidaLaboralPorMes;
-        migrarHorasServicios(); migrarKmLugares(); sembrarKmConocidos(); resembrarKmV2(); migrarVidaLaboralPorMes();
+        migrarHorasServicios(); migrarKmLugares(); sembrarKmConocidos(); resembrarKmV2(); añadirLugaresNuevosV1(); añadirLugaresNuevosV2(); migrarVidaLaboralPorMes();
         state.ultimaSincronizacionNube = new Date().toISOString();
         await saveProfile();
         renderMonths(); renderEntries(); populateDropdowns();

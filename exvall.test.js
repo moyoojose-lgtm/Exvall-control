@@ -35,6 +35,11 @@ import {
   sembrarKmConocidos,
   KM_POR_DEFECTO_LUGAR,
   resembrarKmV2,
+  LUGARES_NUEVOS_V1,
+  añadirLugaresNuevosV1,
+  LUGARES_NUEVOS_V2,
+  añadirLugaresNuevosV2,
+  precioServicioEnLugar,
   migrarVidaLaboralPorMes,
   vidaLaboralDelMes,
 } from './logica.js';
@@ -547,9 +552,10 @@ describe('migrarKmLugares', () => {
     expect(lugares[0].km).toBe(35);
   });
 
-  it('DEFAULT_STATE ya trae km a 0 en todos los lugares', () => {
+  it('DEFAULT_STATE ya trae km a 0 en todos los lugares salvo los que se dan ya con km conocido (ej. Bodega Dehesa de los Canónigos)', () => {
     const state = DEFAULT_STATE();
-    expect(state.lugares.every(l => l.km === 0)).toBe(true);
+    expect(state.lugares.filter(l => l.id !== 'dehesacanonigos').every(l => l.km === 0)).toBe(true);
+    expect(state.lugares.find(l => l.id === 'dehesacanonigos').km).toBe(100);
   });
 
 });
@@ -626,6 +632,125 @@ describe('resembrarKmV2', () => {
     expect(state.lugares.find(l => l.id === 'olmedo').km).toBe(5);
   });
 
+});
+
+describe('añadirLugaresNuevosV1', () => {
+
+  it('Añade "Bodega Dehesa de los Canónigos" a un perfil antiguo que no lo tiene', () => {
+    const state = DEFAULT_STATE();
+    state.lugares = state.lugares.filter(l => l.id !== 'dehesacanonigos');
+    añadirLugaresNuevosV1(state);
+    const nuevo = state.lugares.find(l => l.id === 'dehesacanonigos');
+    expect(nuevo).toBeDefined();
+    expect(nuevo.name).toBe('Bodega Dehesa de los Canónigos');
+    expect(nuevo.km).toBe(100);
+    expect(nuevo.coche).toBe(23);
+    expect(state._lugaresNuevosV1).toBe(true);
+  });
+
+  it('No duplica el lugar si un perfil nuevo ya lo trae de DEFAULT_STATE', () => {
+    const state = DEFAULT_STATE();
+    añadirLugaresNuevosV1(state);
+    expect(state.lugares.filter(l => l.id === 'dehesacanonigos').length).toBe(1);
+  });
+
+  it('Solo se ejecuta una vez: si el usuario borra el lugar a mano después, no se vuelve a añadir', () => {
+    const state = DEFAULT_STATE();
+    añadirLugaresNuevosV1(state);
+    state.lugares = state.lugares.filter(l => l.id !== 'dehesacanonigos');
+    añadirLugaresNuevosV1(state);
+    expect(state.lugares.find(l => l.id === 'dehesacanonigos')).toBeUndefined();
+  });
+
+  it('LUGARES_NUEVOS_V1 contiene la Bodega Dehesa de los Canónigos con los datos correctos', () => {
+    const l = LUGARES_NUEVOS_V1.find(x => x.id === 'dehesacanonigos');
+    expect(l).toEqual({id:'dehesacanonigos', name:'Bodega Dehesa de los Canónigos', coche:23, km:100, preciosServicio:{boda:85}});
+  });
+
+});
+
+describe('añadirLugaresNuevosV2', () => {
+
+  it('Añade Gaonera y Valladolid a un perfil antiguo que no los tiene', () => {
+    const state = DEFAULT_STATE();
+    state.lugares = state.lugares.filter(l => l.id !== 'gaonera' && l.id !== 'valladolid');
+    añadirLugaresNuevosV2(state);
+    const gaonera = state.lugares.find(l => l.id === 'gaonera');
+    const valladolid = state.lugares.find(l => l.id === 'valladolid');
+    expect(gaonera).toBeDefined();
+    expect(gaonera.preciosServicio).toEqual({boda:85});
+    expect(valladolid).toBeDefined();
+    expect(valladolid.preciosServicio).toEqual({comidas:60});
+    expect(state._lugaresNuevosV2).toBe(true);
+  });
+
+  it('No duplica los lugares si un perfil nuevo ya los trae de DEFAULT_STATE', () => {
+    const state = DEFAULT_STATE();
+    añadirLugaresNuevosV2(state);
+    expect(state.lugares.filter(l => l.id === 'gaonera').length).toBe(1);
+    expect(state.lugares.filter(l => l.id === 'valladolid').length).toBe(1);
+  });
+
+  it('Solo se ejecuta una vez: no depende de que _lugaresNuevosV1 ya se hubiera ejecutado', () => {
+    const state = DEFAULT_STATE();
+    state.lugares = state.lugares.filter(l => l.id !== 'gaonera' && l.id !== 'valladolid');
+    state._lugaresNuevosV1 = true;
+    añadirLugaresNuevosV2(state);
+    expect(state.lugares.find(l => l.id === 'gaonera')).toBeDefined();
+    expect(state.lugares.find(l => l.id === 'valladolid')).toBeDefined();
+  });
+
+});
+
+describe('precioServicioEnLugar', () => {
+  const state = DEFAULT_STATE();
+  const boda = state.servicios.find(s => s.id === 'boda');
+  const comidas = state.servicios.find(s => s.id === 'comidas');
+  const dehesa = state.lugares.find(l => l.id === 'dehesacanonigos');
+  const gaonera = state.lugares.find(l => l.id === 'gaonera');
+  const valladolid = state.lugares.find(l => l.id === 'valladolid');
+  const arzuaga = state.lugares.find(l => l.id === 'arzuaga');
+
+  it('Usa el precio general del servicio si el lugar no tiene precio especial para ese servicio', () => {
+    expect(precioServicioEnLugar(boda, arzuaga)).toBe(80);
+  });
+
+  it('Usa el precio especial del lugar si existe (Boda en Dehesa de los Canónigos = 85€)', () => {
+    expect(precioServicioEnLugar(boda, dehesa)).toBe(85);
+  });
+
+  it('Usa el precio especial del lugar (Boda en Gaonera = 85€)', () => {
+    expect(precioServicioEnLugar(boda, gaonera)).toBe(85);
+  });
+
+  it('Comidas en Valladolid = 60€ por defecto', () => {
+    expect(precioServicioEnLugar(comidas, valladolid)).toBe(60);
+  });
+
+  it('Comidas en Valladolid, restaurante "Trasto" = precio normal (65€), no el de Valladolid', () => {
+    expect(precioServicioEnLugar(comidas, valladolid, 'Trasto')).toBe(65);
+  });
+
+  it('El nombre del restaurante "Trasto" no distingue mayúsculas/espacios', () => {
+    expect(precioServicioEnLugar(comidas, valladolid, '  trasto  ')).toBe(65);
+  });
+
+  it('Otro restaurante distinto de Trasto en Valladolid sigue costando 60€', () => {
+    expect(precioServicioEnLugar(comidas, valladolid, 'Restaurante Casa Pepe')).toBe(60);
+  });
+
+  it('La excepción de Trasto no afecta a otros servicios (ej. Cenas) en Valladolid', () => {
+    const cenas = state.servicios.find(s => s.id === 'cenas');
+    expect(precioServicioEnLugar(cenas, valladolid, 'Trasto')).toBe(cenas.precio);
+  });
+
+  it('Devuelve 0 si no hay servicio', () => {
+    expect(precioServicioEnLugar(null, dehesa)).toBe(0);
+  });
+
+  it('Funciona sin lugar (usa el precio general)', () => {
+    expect(precioServicioEnLugar(boda, null)).toBe(80);
+  });
 });
 
 describe('kmEntryFijo', () => {
